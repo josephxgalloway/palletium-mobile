@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import api from '../api/client';
 import type { Track } from '../../types';
 import { getArtistName, getCoverUrl, getDuration } from '../../types';
@@ -104,7 +104,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   loadPreviewCount: async () => {
     try {
-      const stored = await AsyncStorage.getItem(PREVIEW_COUNT_KEY);
+      const stored = await SecureStore.getItemAsync(PREVIEW_COUNT_KEY);
       if (stored) {
         set({ previewCount: parseInt(stored, 10) });
       }
@@ -152,7 +152,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         const newCount = currentCount + 1;
         set({ previewCount: newCount });
         try {
-          await AsyncStorage.setItem(PREVIEW_COUNT_KEY, newCount.toString());
+          await SecureStore.setItemAsync(PREVIEW_COUNT_KEY, newCount.toString());
         } catch (e) {
           console.warn('Failed to save preview count:', e);
         }
