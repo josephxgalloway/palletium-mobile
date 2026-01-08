@@ -37,9 +37,15 @@ export default function SearchScreen() {
     setHasSearched(true);
 
     try {
-      const response = await api.get(`/tracks/search?q=${encodeURIComponent(text.trim())}`);
+      const url = `/search?q=${encodeURIComponent(text.trim())}`;
+      console.log('Search URL:', url);
+      const response = await api.get(url);
+      console.log('Search response:', JSON.stringify(response.data));
       setResults(response.data.tracks || response.data || []);
-    } catch (error) {
+    } catch (error: any) {
+      console.log('Search error response:', JSON.stringify(error.response?.data));
+      console.log('Search error status:', error.response?.status);
+      console.log('Search error URL:', error.config?.url);
       console.error('Search failed:', error);
       setResults([]);
     } finally {
