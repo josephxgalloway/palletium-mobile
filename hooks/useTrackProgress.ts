@@ -36,7 +36,7 @@ function useMockActiveTrack() {
 }
 
 export function useTrackProgress() {
-  const { setPosition, setDuration, setIsPlaying, checkAndRecordPlay, isPlaying, position, duration, currentTrack } = usePlayerStore();
+  const { setPosition, setDuration, setIsPlaying, checkAndRecordPlay, checkPreviewEnd, isPlaying, position, duration, currentTrack, isPreviewMode } = usePlayerStore();
   const checkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Use native hooks if available, otherwise use mock
@@ -60,17 +60,23 @@ export function useTrackProgress() {
     }
   }, [playbackState.state, setIsPlaying]);
 
-  // Set up interval to check for 30s threshold while playing
+  // Set up interval to check for 30s threshold and preview end while playing
   useEffect(() => {
     const isCurrentlyPlaying = isNativeAvailable && State
       ? playbackState.state === State.Playing
       : isPlaying;
 
     if (isCurrentlyPlaying) {
-      // Check every 5 seconds while playing
+      // Check every second while playing (needed for preview timing)
       checkIntervalRef.current = setInterval(() => {
-        checkAndRecordPlay();
-      }, 5000);
+        // Check preview end (for unauthenticated users)
+        if (isPreviewMode) {
+          checkPreviewEnd();
+        } else {
+          // Check for play recording (for authenticated users)
+          checkAndRecordPlay();
+        }
+      }, 1000);
     } else {
       if (checkIntervalRef.current) {
         clearInterval(checkIntervalRef.current);
@@ -83,7 +89,7 @@ export function useTrackProgress() {
         clearInterval(checkIntervalRef.current);
       }
     };
-  }, [playbackState.state, isPlaying, checkAndRecordPlay]);
+  }, [playbackState.state, isPlaying, isPreviewMode, checkAndRecordPlay, checkPreviewEnd]);
 
   // For native player
   if (isNativeAvailable && State) {

@@ -8,8 +8,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useNetworkStore } from '@/lib/store/networkStore';
+import { usePlayerStore } from '@/lib/store/playerStore';
 import { setupPlayer } from '@/lib/audio/trackPlayer';
 import MiniPlayer from '@/components/player/MiniPlayer';
+import SignupPromptModal from '@/components/SignupPromptModal';
 import { toastConfig } from '@/components/ui/Toast';
 import { theme } from '@/constants/theme';
 
@@ -32,6 +34,7 @@ const PalletiumTheme = {
 export default function RootLayout() {
   const { checkAuth, isLoading } = useAuthStore();
   const { initialize: initNetwork } = useNetworkStore();
+  const { loadPreviewCount } = usePlayerStore();
   const [playerReady, setPlayerReady] = useState(false);
 
   const [loaded] = useFonts({
@@ -42,6 +45,9 @@ export default function RootLayout() {
     async function init() {
       // Initialize auth
       await checkAuth();
+
+      // Load preview count for free users
+      await loadPreviewCount();
 
       // Initialize player
       const ready = await setupPlayer();
@@ -90,6 +96,8 @@ export default function RootLayout() {
         </Stack>
         {/* Mini player shows above tab bar */}
         <MiniPlayer />
+        {/* Signup prompt for free users */}
+        <SignupPromptModal />
         {/* Toast notifications */}
         <Toast config={toastConfig} />
       </ThemeProvider>

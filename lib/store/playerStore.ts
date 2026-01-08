@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/client';
 import type { Track } from '../../types';
 import { getArtistName, getCoverUrl, getDuration } from '../../types';
@@ -14,6 +15,14 @@ try {
   console.warn('TrackPlayer not available - running in mock mode (Expo Go)');
 }
 
+// Preview mode constants
+const PREVIEW_DURATION = 15; // seconds
+const FADE_DURATION = 3; // seconds for fade out
+const MAX_FREE_PREVIEWS = 3;
+const PREVIEW_START_OFFSET = 30; // Start 30s into track to catch the hook
+
+const PREVIEW_COUNT_KEY = 'palletium_preview_count';
+
 interface PlayerState {
   currentTrack: Track | null;
   queue: Track[];
@@ -23,6 +32,12 @@ interface PlayerState {
   playStartTime: number | null;
   hasRecordedPlay: boolean;
   isNativePlayer: boolean;
+
+  // Preview mode state
+  isPreviewMode: boolean;
+  previewCount: number;
+  showSignupPrompt: boolean;
+  previewEndTime: number | null;
 
   // Actions
   playTrack: (track: Track) => Promise<void>;
@@ -37,7 +52,38 @@ interface PlayerState {
   setDuration: (duration: number) => void;
   setIsPlaying: (playing: boolean) => void;
   checkAndRecordPlay: () => Promise<void>;
+  checkPreviewEnd: () => Promise<void>;
+  dismissSignupPrompt: () => void;
+  loadPreviewCount: () => Promise<void>;
   reset: () => void;
+}
+
+// Fade out helper
+async function fadeOutVolume(): Promise<void> {
+  if (!isNativePlayerAvailable || !TrackPlayer) return;
+
+  const steps = 10;
+  const stepDuration = (FADE_DURATION * 1000) / steps;
+
+  for (let i = steps; i >= 0; i--) {
+    const volume = i / steps;
+    try {
+      await TrackPlayer.setVolume(volume);
+      await new Promise(resolve => setTimeout(resolve, stepDuration));
+    } catch (e) {
+      break;
+    }
+  }
+}
+
+// Reset volume helper
+async function resetVolume(): Promise<void> {
+  if (!isNativePlayerAvailable || !TrackPlayer) return;
+  try {
+    await TrackPlayer.setVolume(1.0);
+  } catch (e) {
+    // Ignore
+  }
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -50,11 +96,69 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   hasRecordedPlay: false,
   isNativePlayer: isNativePlayerAvailable,
 
+  // Preview mode state
+  isPreviewMode: false,
+  previewCount: 0,
+  showSignupPrompt: false,
+  previewEndTime: null,
+
+  loadPreviewCount: async () => {
+    try {
+      const stored = await AsyncStorage.getItem(PREVIEW_COUNT_KEY);
+      if (stored) {
+        set({ previewCount: parseInt(stored, 10) });
+      }
+    } catch (e) {
+      console.warn('Failed to load preview count:', e);
+    }
+  },
+
   playTrack: async (track) => {
     try {
+      // Check authentication status
+      const { useAuthStore } = await import('./authStore');
+      const user = useAuthStore.getState().user;
+      const isAuthenticated = !!user;
+
       const artistName = getArtistName(track);
       const coverUrl = getCoverUrl(track);
-      const duration = getDuration(track);
+      const trackDuration = getDuration(track);
+
+      // Reset volume in case previous preview faded out
+      await resetVolume();
+
+      // Determine if preview mode
+      const isPreview = !isAuthenticated;
+      let startPosition = 0;
+      let effectiveDuration = trackDuration;
+
+      if (isPreview) {
+        // Check preview count - show signup prompt if exceeded
+        const currentCount = get().previewCount;
+        if (currentCount >= MAX_FREE_PREVIEWS) {
+          set({ showSignupPrompt: true });
+          return; // Don't play, show signup instead
+        }
+
+        // Calculate preview start position (30s in, or 0 if track is short)
+        startPosition = trackDuration > PREVIEW_START_OFFSET + PREVIEW_DURATION
+          ? PREVIEW_START_OFFSET
+          : 0;
+
+        // Preview is only 15 seconds
+        effectiveDuration = PREVIEW_DURATION;
+
+        // Increment preview count
+        const newCount = currentCount + 1;
+        set({ previewCount: newCount });
+        try {
+          await AsyncStorage.setItem(PREVIEW_COUNT_KEY, newCount.toString());
+        } catch (e) {
+          console.warn('Failed to save preview count:', e);
+        }
+
+        console.log(`[Preview Mode] Playing ${PREVIEW_DURATION}s preview (${newCount}/${MAX_FREE_PREVIEWS})`);
+      }
 
       if (isNativePlayerAvailable && TrackPlayer) {
         // Real playback with native module
@@ -65,22 +169,45 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           title: track.title,
           artist: artistName,
           artwork: coverUrl || undefined,
-          duration: duration,
+          duration: trackDuration,
         });
+
+        // Seek to start position for preview mode
+        if (startPosition > 0) {
+          await TrackPlayer.seekTo(startPosition);
+        }
+
         await TrackPlayer.play();
       } else {
         // Mock mode - just update UI state
-        console.log('[Mock Player] Playing:', track.title);
+        console.log('[Mock Player] Playing:', track.title, isPreview ? '(PREVIEW)' : '');
       }
 
       set({
         currentTrack: track,
         isPlaying: true,
-        playStartTime: Date.now(),
-        hasRecordedPlay: false,
-        position: 0,
-        duration: duration,
+        playStartTime: isPreview ? null : Date.now(), // Don't track play time in preview
+        hasRecordedPlay: isPreview, // Prevent recording for preview
+        position: startPosition,
+        duration: trackDuration,
+        isPreviewMode: isPreview,
+        previewEndTime: isPreview ? Date.now() + (PREVIEW_DURATION * 1000) : null,
       });
+
+      // Show preview count toast
+      if (isPreview) {
+        const Toast = (await import('react-native-toast-message')).default;
+        const remaining = MAX_FREE_PREVIEWS - get().previewCount;
+        Toast.show({
+          type: 'info',
+          text1: '🎵 Preview Mode',
+          text2: remaining > 0
+            ? `${remaining} free preview${remaining === 1 ? '' : 's'} remaining`
+            : 'Sign up for unlimited listening!',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+      }
     } catch (error) {
       console.error('Failed to play track:', error);
       // Still update UI even if native player fails
@@ -89,7 +216,38 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         isPlaying: false,
         position: 0,
         duration: getDuration(track),
+        isPreviewMode: false,
       });
+    }
+  },
+
+  // Check if preview should end (called from progress hook)
+  checkPreviewEnd: async () => {
+    const { isPreviewMode, previewEndTime, isPlaying, previewCount } = get();
+
+    if (!isPreviewMode || !previewEndTime || !isPlaying) {
+      return;
+    }
+
+    const now = Date.now();
+    const timeUntilEnd = previewEndTime - now;
+
+    // Start fade 3 seconds before end
+    if (timeUntilEnd <= FADE_DURATION * 1000 && timeUntilEnd > 0) {
+      // Fade is handled by the time check below
+    }
+
+    // End preview
+    if (timeUntilEnd <= 0) {
+      console.log('[Preview Mode] Preview ended, fading out...');
+
+      // Fade out gracefully
+      await fadeOutAndStop();
+
+      // Check if should show signup prompt
+      if (previewCount >= MAX_FREE_PREVIEWS) {
+        set({ showSignupPrompt: true });
+      }
     }
   },
 
@@ -119,7 +277,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         console.log('[Mock Player] Paused');
       }
       set({ isPlaying: false });
-      get().checkAndRecordPlay();
+
+      // Only record play if not in preview mode
+      if (!get().isPreviewMode) {
+        get().checkAndRecordPlay();
+      }
     } catch (error) {
       console.error('Failed to pause:', error);
       set({ isPlaying: false });
@@ -128,6 +290,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   resume: async () => {
     try {
+      // Check if in preview mode and preview has ended
+      const { isPreviewMode, previewEndTime } = get();
+      if (isPreviewMode && previewEndTime && Date.now() >= previewEndTime) {
+        // Preview has ended, can't resume
+        return;
+      }
+
       if (isNativePlayerAvailable && TrackPlayer) {
         await TrackPlayer.play();
       } else {
@@ -135,7 +304,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
 
       const { hasRecordedPlay, playStartTime } = get();
-      if (!hasRecordedPlay && !playStartTime) {
+      if (!hasRecordedPlay && !playStartTime && !isPreviewMode) {
         set({ playStartTime: Date.now() });
       }
 
@@ -147,12 +316,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   stop: async () => {
     try {
-      await get().checkAndRecordPlay();
+      // Only record play if not in preview mode
+      if (!get().isPreviewMode) {
+        await get().checkAndRecordPlay();
+      }
 
       if (isNativePlayerAvailable && TrackPlayer) {
         await TrackPlayer.stop();
         await TrackPlayer.reset();
       }
+
+      // Reset volume
+      await resetVolume();
 
       set({
         currentTrack: null,
@@ -160,6 +335,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         position: 0,
         playStartTime: null,
         hasRecordedPlay: false,
+        isPreviewMode: false,
+        previewEndTime: null,
       });
     } catch (error) {
       console.error('Failed to stop:', error);
@@ -168,7 +345,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   skipNext: async () => {
     try {
-      await get().checkAndRecordPlay();
+      if (!get().isPreviewMode) {
+        await get().checkAndRecordPlay();
+      }
 
       if (isNativePlayerAvailable && TrackPlayer) {
         await TrackPlayer.skipToNext();
@@ -177,6 +356,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       set({
         playStartTime: Date.now(),
         hasRecordedPlay: false,
+        isPreviewMode: false,
+        previewEndTime: null,
       });
     } catch (error) {
       console.error('Failed to skip next:', error);
@@ -192,6 +373,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       set({
         playStartTime: Date.now(),
         hasRecordedPlay: false,
+        isPreviewMode: false,
+        previewEndTime: null,
       });
     } catch (error) {
       console.error('Failed to skip previous:', error);
@@ -199,6 +382,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   seekTo: async (position) => {
+    // Disable seeking in preview mode
+    if (get().isPreviewMode) {
+      console.log('[Preview Mode] Seeking disabled in preview mode');
+      return;
+    }
+
     try {
       if (isNativePlayerAvailable && TrackPlayer) {
         await TrackPlayer.seekTo(position);
@@ -213,9 +402,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setDuration: (duration) => set({ duration }),
   setIsPlaying: (playing) => set({ isPlaying: playing }),
 
-  // Critical: Record play after 30 seconds
+  dismissSignupPrompt: () => set({ showSignupPrompt: false }),
+
+  // Critical: Record play after 30 seconds (only for authenticated users)
   checkAndRecordPlay: async () => {
-    const { currentTrack, playStartTime, hasRecordedPlay, position, duration } = get();
+    const { currentTrack, playStartTime, hasRecordedPlay, position, duration, isPreviewMode } = get();
+
+    // Never record plays in preview mode
+    if (isPreviewMode) {
+      return;
+    }
 
     if (hasRecordedPlay || !currentTrack || !playStartTime) {
       return;
@@ -293,5 +489,29 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     duration: 0,
     playStartTime: null,
     hasRecordedPlay: false,
+    isPreviewMode: false,
+    previewEndTime: null,
+    showSignupPrompt: false,
   }),
 }));
+
+// Helper for fading out and stopping
+async function fadeOutAndStop(): Promise<void> {
+  await fadeOutVolume();
+
+  if (isNativePlayerAvailable && TrackPlayer) {
+    try {
+      await TrackPlayer.pause();
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  // Reset volume for next play
+  await resetVolume();
+
+  usePlayerStore.setState({
+    isPlaying: false,
+    previewEndTime: null,
+  });
+}

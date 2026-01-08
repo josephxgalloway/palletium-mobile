@@ -7,7 +7,7 @@ import { theme } from '@/constants/theme';
 import { getArtistName, getCoverUrl } from '@/types';
 
 export default function MiniPlayer() {
-  const { currentTrack, pause, resume } = usePlayerStore();
+  const { currentTrack, pause, resume, isPreviewMode } = usePlayerStore();
   const { position, duration, isPlaying, isBuffering } = useTrackProgress();
 
   if (!currentTrack) return null;
@@ -45,9 +45,16 @@ export default function MiniPlayer() {
 
         {/* Track info */}
         <View style={styles.info}>
-          <Text style={styles.title} numberOfLines={1}>
-            {currentTrack.title}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>
+              {currentTrack.title}
+            </Text>
+            {isPreviewMode && (
+              <View style={styles.previewBadge}>
+                <Text style={styles.previewBadgeText}>PREVIEW</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.artist} numberOfLines={1}>
             {artistName} • {formatTime(position)} / {formatTime(duration)}
           </Text>
@@ -114,10 +121,27 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: theme.spacing.md,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
   title: {
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.textPrimary,
+    flexShrink: 1,
+  },
+  previewBadge: {
+    backgroundColor: theme.colors.warning,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  previewBadgeText: {
+    fontSize: 10,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.background,
   },
   artist: {
     fontSize: theme.fontSize.sm,
