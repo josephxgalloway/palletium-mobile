@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/lib/store/playerStore';
 import { useTrackProgress } from '@/hooks/useTrackProgress';
 import { theme } from '@/constants/theme';
+import { getArtistName, getCoverUrl } from '@/types';
 
 export default function MiniPlayer() {
   const { currentTrack, pause, resume } = usePlayerStore();
@@ -12,6 +13,8 @@ export default function MiniPlayer() {
   if (!currentTrack) return null;
 
   const progress = duration > 0 ? (position / duration) * 100 : 0;
+  const coverUrl = getCoverUrl(currentTrack);
+  const artistName = getArtistName(currentTrack);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -32,8 +35,8 @@ export default function MiniPlayer() {
 
       <View style={styles.content}>
         {/* Cover art */}
-        {currentTrack.cover_url ? (
-          <Image source={{ uri: currentTrack.cover_url }} style={styles.cover} />
+        {coverUrl ? (
+          <Image source={{ uri: coverUrl }} style={styles.cover} />
         ) : (
           <View style={[styles.cover, styles.coverPlaceholder]}>
             <Ionicons name="musical-note" size={20} color={theme.colors.textMuted} />
@@ -46,7 +49,7 @@ export default function MiniPlayer() {
             {currentTrack.title}
           </Text>
           <Text style={styles.artist} numberOfLines={1}>
-            {currentTrack.artist_name} • {formatTime(position)} / {formatTime(duration)}
+            {artistName} • {formatTime(position)} / {formatTime(duration)}
           </Text>
         </View>
 

@@ -17,6 +17,7 @@ import { usePlayerStore } from '@/lib/store/playerStore';
 import api from '@/lib/api/client';
 import { theme } from '@/constants/theme';
 import type { Playlist, Track, RecentPlay } from '@/types';
+import { getArtistName, getCoverUrl } from '@/types';
 
 type TabType = 'playlists' | 'history' | 'liked';
 
@@ -98,31 +99,36 @@ export default function LibraryScreen() {
     </TouchableOpacity>
   );
 
-  const renderHistoryItem = ({ item }: { item: RecentPlay }) => (
-    <TouchableOpacity
-      style={styles.historyItem}
-      onPress={() => playTrack(item.track)}
-    >
-      {item.track.cover_url ? (
-        <Image source={{ uri: item.track.cover_url }} style={styles.historyCover} />
-      ) : (
-        <View style={[styles.historyCover, styles.historyCoverPlaceholder]}>
-          <Ionicons name="musical-note" size={18} color={theme.colors.textMuted} />
+  const renderHistoryItem = ({ item }: { item: RecentPlay }) => {
+    const coverUrl = getCoverUrl(item.track);
+    const artistName = getArtistName(item.track);
+
+    return (
+      <TouchableOpacity
+        style={styles.historyItem}
+        onPress={() => playTrack(item.track)}
+      >
+        {coverUrl ? (
+          <Image source={{ uri: coverUrl }} style={styles.historyCover} />
+        ) : (
+          <View style={[styles.historyCover, styles.historyCoverPlaceholder]}>
+            <Ionicons name="musical-note" size={18} color={theme.colors.textMuted} />
+          </View>
+        )}
+        <View style={styles.historyInfo}>
+          <Text style={styles.historyTitle} numberOfLines={1}>{item.track.title}</Text>
+          <Text style={styles.historyArtist} numberOfLines={1}>
+            {artistName}
+          </Text>
         </View>
-      )}
-      <View style={styles.historyInfo}>
-        <Text style={styles.historyTitle} numberOfLines={1}>{item.track.title}</Text>
-        <Text style={styles.historyArtist} numberOfLines={1}>
-          {item.track.artist_name}
-        </Text>
-      </View>
-      {item.is_first_listen && (
-        <View style={styles.firstListenBadge}>
-          <Text style={styles.firstListenText}>1st</Text>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
+        {item.is_first_listen && (
+          <View style={styles.firstListenBadge}>
+            <Text style={styles.firstListenText}>1st</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>

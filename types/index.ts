@@ -23,6 +23,26 @@ export interface Track {
   play_count: number;
   genre: string | null;
   review_status: string;
+  // API may return these alternative field names
+  artist_name_full?: string;
+  cover_art_url?: string;
+  duration?: number | null;
+  album?: string;
+}
+
+// Helper to get display artist name (API returns empty artist_name but populated artist_name_full)
+export function getArtistName(track: Track): string {
+  return track.artist_name_full || track.artist_name || 'Unknown Artist';
+}
+
+// Helper to get cover image URL (API uses cover_art_url)
+export function getCoverUrl(track: Track): string | null {
+  return track.cover_art_url || track.cover_url || null;
+}
+
+// Helper to get duration in seconds (API uses duration which may be null)
+export function getDuration(track: Track): number {
+  return track.duration_seconds || track.duration || 0;
 }
 
 export interface DashboardData {

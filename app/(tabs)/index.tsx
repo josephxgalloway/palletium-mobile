@@ -15,6 +15,7 @@ import api from '@/lib/api/client';
 import { usePlayerStore } from '@/lib/store/playerStore';
 import { theme } from '@/constants/theme';
 import type { Track } from '@/types';
+import { getArtistName, getCoverUrl, getDuration } from '@/types';
 
 export default function DiscoverScreen() {
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -67,6 +68,9 @@ export default function DiscoverScreen() {
 
   const renderTrack = ({ item }: { item: Track }) => {
     const isActive = currentTrack?.id === item.id;
+    const coverUrl = getCoverUrl(item);
+    const artistName = getArtistName(item);
+    const duration = getDuration(item);
 
     return (
       <TouchableOpacity
@@ -75,8 +79,8 @@ export default function DiscoverScreen() {
         activeOpacity={0.7}
       >
         <View style={styles.coverContainer}>
-          {item.cover_url ? (
-            <Image source={{ uri: item.cover_url }} style={styles.cover} />
+          {coverUrl ? (
+            <Image source={{ uri: coverUrl }} style={styles.cover} />
           ) : (
             <View style={[styles.cover, styles.coverPlaceholder]}>
               <Ionicons name="musical-note" size={24} color={theme.colors.textMuted} />
@@ -95,9 +99,9 @@ export default function DiscoverScreen() {
 
         <View style={styles.trackInfo}>
           <Text style={styles.trackTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.trackArtist} numberOfLines={1}>{item.artist_name}</Text>
+          <Text style={styles.trackArtist} numberOfLines={1}>{artistName}</Text>
           <View style={styles.trackMeta}>
-            <Text style={styles.duration}>{formatDuration(item.duration_seconds)}</Text>
+            <Text style={styles.duration}>{formatDuration(duration)}</Text>
             <Text style={styles.plays}>{item.play_count?.toLocaleString() || 0} plays</Text>
           </View>
         </View>

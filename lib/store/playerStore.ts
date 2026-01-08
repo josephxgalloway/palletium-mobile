@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../api/client';
 import type { Track } from '../../types';
+import { getArtistName, getCoverUrl, getDuration } from '../../types';
 
 // Lazy load TrackPlayer - allows app to run in Expo Go without native module
 let TrackPlayer: any = null;
@@ -51,6 +52,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   playTrack: async (track) => {
     try {
+      const artistName = getArtistName(track);
+      const coverUrl = getCoverUrl(track);
+      const duration = getDuration(track);
+
       if (isNativePlayerAvailable && TrackPlayer) {
         // Real playback with native module
         await TrackPlayer.reset();
@@ -58,9 +63,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           id: track.id.toString(),
           url: track.audio_url,
           title: track.title,
-          artist: track.artist_name,
-          artwork: track.cover_url || undefined,
-          duration: track.duration_seconds,
+          artist: artistName,
+          artwork: coverUrl || undefined,
+          duration: duration,
         });
         await TrackPlayer.play();
       } else {
@@ -74,7 +79,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         playStartTime: Date.now(),
         hasRecordedPlay: false,
         position: 0,
-        duration: track.duration_seconds,
+        duration: duration,
       });
     } catch (error) {
       console.error('Failed to play track:', error);
@@ -83,7 +88,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         currentTrack: track,
         isPlaying: false,
         position: 0,
-        duration: track.duration_seconds,
+        duration: getDuration(track),
       });
     }
   },
@@ -95,9 +100,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           id: track.id.toString(),
           url: track.audio_url,
           title: track.title,
-          artist: track.artist_name,
-          artwork: track.cover_url || undefined,
-          duration: track.duration_seconds,
+          artist: getArtistName(track),
+          artwork: getCoverUrl(track) || undefined,
+          duration: getDuration(track),
         });
       }
       set((state) => ({ queue: [...state.queue, track] }));

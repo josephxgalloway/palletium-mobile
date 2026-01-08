@@ -16,6 +16,7 @@ import { usePlayerStore } from '@/lib/store/playerStore';
 import api from '@/lib/api/client';
 import { theme } from '@/constants/theme';
 import type { Track } from '@/types';
+import { getArtistName, getCoverUrl, getDuration } from '@/types';
 
 export default function SearchScreen() {
   const { playTrack, currentTrack, isPlaying } = usePlayerStore();
@@ -42,10 +43,10 @@ export default function SearchScreen() {
       const allTracks = response.data.tracks || response.data || [];
       const searchTerm = text.trim().toLowerCase();
 
-      // Filter tracks by title or artist name
+      // Filter tracks by title or artist name (use helper for correct field)
       const filtered = allTracks.filter((track: Track) =>
         track.title?.toLowerCase().includes(searchTerm) ||
-        track.artist_name?.toLowerCase().includes(searchTerm)
+        getArtistName(track).toLowerCase().includes(searchTerm)
       );
 
       setResults(filtered);
@@ -76,14 +77,17 @@ export default function SearchScreen() {
 
   const renderTrack = ({ item }: { item: Track }) => {
     const isActive = currentTrack?.id === item.id;
+    const coverUrl = getCoverUrl(item);
+    const artistName = getArtistName(item);
+    const duration = getDuration(item);
 
     return (
       <TouchableOpacity
         style={[styles.trackItem, isActive && styles.trackItemActive]}
         onPress={() => handleTrackPress(item)}
       >
-        {item.cover_url ? (
-          <Image source={{ uri: item.cover_url }} style={styles.trackCover} />
+        {coverUrl ? (
+          <Image source={{ uri: coverUrl }} style={styles.trackCover} />
         ) : (
           <View style={[styles.trackCover, styles.trackCoverPlaceholder]}>
             <Ionicons name="musical-note" size={20} color={theme.colors.textMuted} />
@@ -95,7 +99,7 @@ export default function SearchScreen() {
             {item.title}
           </Text>
           <Text style={styles.trackArtist} numberOfLines={1}>
-            {item.artist_name} - {formatDuration(item.duration_seconds)}
+            {artistName} - {formatDuration(duration)}
           </Text>
         </View>
 

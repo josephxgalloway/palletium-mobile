@@ -6,6 +6,7 @@ import Slider from '@react-native-community/slider';
 import { usePlayerStore } from '@/lib/store/playerStore';
 import { useTrackProgress } from '@/hooks/useTrackProgress';
 import { theme } from '@/constants/theme';
+import { getArtistName, getCoverUrl } from '@/types';
 
 const { width } = Dimensions.get('window');
 const ARTWORK_SIZE = width - 80;
@@ -39,6 +40,9 @@ export default function PlayerScreen() {
     await seekTo(value);
   };
 
+  const coverUrl = getCoverUrl(currentTrack);
+  const artistName = getArtistName(currentTrack);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -54,9 +58,9 @@ export default function PlayerScreen() {
 
       {/* Artwork */}
       <View style={styles.artworkContainer}>
-        {currentTrack.cover_url ? (
+        {coverUrl ? (
           <Image
-            source={{ uri: currentTrack.cover_url }}
+            source={{ uri: coverUrl }}
             style={styles.artwork}
           />
         ) : (
@@ -69,7 +73,7 @@ export default function PlayerScreen() {
       {/* Track Info */}
       <View style={styles.trackInfo}>
         <Text style={styles.title} numberOfLines={1}>{currentTrack.title}</Text>
-        <Text style={styles.artist} numberOfLines={1}>{currentTrack.artist_name}</Text>
+        <Text style={styles.artist} numberOfLines={1}>{artistName}</Text>
       </View>
 
       {/* Progress Bar */}
