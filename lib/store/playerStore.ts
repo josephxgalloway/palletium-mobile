@@ -38,6 +38,7 @@ interface PlayerState {
   previewCount: number;
   showSignupPrompt: boolean;
   previewEndTime: number | null;
+  isFadingOut: boolean;
 
   // Actions
   playTrack: (track: Track) => Promise<void>;
@@ -58,15 +59,16 @@ interface PlayerState {
   reset: () => void;
 }
 
-// Fade out helper
+// Fade out helper - uses 30 steps over 3 seconds for smooth transition
 async function fadeOutVolume(): Promise<void> {
   if (!isNativePlayerAvailable || !TrackPlayer) return;
 
-  const steps = 10;
-  const stepDuration = (FADE_DURATION * 1000) / steps;
+  const steps = 30; // More steps = smoother fade
+  const stepDuration = (FADE_DURATION * 1000) / steps; // 100ms per step
 
   for (let i = steps; i >= 0; i--) {
-    const volume = i / steps;
+    // Use exponential curve for more natural fade perception
+    const volume = Math.pow(i / steps, 2);
     try {
       await TrackPlayer.setVolume(volume);
       await new Promise(resolve => setTimeout(resolve, stepDuration));
@@ -101,6 +103,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   previewCount: 0,
   showSignupPrompt: false,
   previewEndTime: null,
+  isFadingOut: false,
 
   loadPreviewCount: async () => {
     try {
@@ -223,23 +226,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   // Check if preview should end (called from progress hook)
   checkPreviewEnd: async () => {
-    const { isPreviewMode, previewEndTime, isPlaying, previewCount } = get();
+    const { isPreviewMode, previewEndTime, isPlaying, previewCount, isFadingOut } = get();
 
-    if (!isPreviewMode || !previewEndTime || !isPlaying) {
+    // Skip if not in preview mode, already fading, or not playing
+    if (!isPreviewMode || !previewEndTime || !isPlaying || isFadingOut) {
       return;
     }
 
     const now = Date.now();
     const timeUntilEnd = previewEndTime - now;
 
-    // Start fade 3 seconds before end
-    if (timeUntilEnd <= FADE_DURATION * 1000 && timeUntilEnd > 0) {
-      // Fade is handled by the time check below
-    }
+    // Start fade when we're within FADE_DURATION seconds of the end
+    if (timeUntilEnd <= FADE_DURATION * 1000) {
+      // Set flag immediately to prevent multiple triggers
+      set({ isFadingOut: true });
 
-    // End preview
-    if (timeUntilEnd <= 0) {
-      console.log('[Preview Mode] Preview ended, fading out...');
+      console.log('[Preview Mode] Starting fade out...');
 
       // Fade out gracefully
       await fadeOutAndStop();
@@ -492,6 +494,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     isPreviewMode: false,
     previewEndTime: null,
     showSignupPrompt: false,
+    isFadingOut: false,
   }),
 }));
 
@@ -513,5 +516,6 @@ async function fadeOutAndStop(): Promise<void> {
   usePlayerStore.setState({
     isPlaying: false,
     previewEndTime: null,
+    isFadingOut: false,
   });
 }

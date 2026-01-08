@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Link } from 'expo-router';
@@ -44,7 +45,11 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <View style={styles.header}>
-          <Text style={styles.logo}>Palletium</Text>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.tagline}>Stream music. Earn rewards.</Text>
         </View>
 
@@ -141,10 +146,9 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xxl,
   },
   logo: {
-    fontSize: 40,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.primary,
-    letterSpacing: -1,
+    width: '70%',
+    height: 50,
+    alignSelf: 'center',
   },
   tagline: {
     fontSize: theme.fontSize.md,

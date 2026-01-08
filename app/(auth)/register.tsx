@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Link } from 'expo-router';
@@ -48,6 +49,11 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <View style={styles.header}>
+            <Image
+              source={require('@/assets/images/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Join the music revolution</Text>
           </View>
@@ -201,6 +207,12 @@ const styles = StyleSheet.create({
   header: {
     marginTop: theme.spacing.lg,
     marginBottom: theme.spacing.xl,
+    alignItems: 'center',
+  },
+  logo: {
+    width: '60%',
+    height: 40,
+    marginBottom: theme.spacing.md,
   },
   title: {
     fontSize: theme.fontSize.xxxl,
