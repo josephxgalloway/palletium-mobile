@@ -233,7 +233,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const user = useAuthStore.getState().user;
 
       if (!user) {
-        console.log('No user logged in, skipping play record');
+        // Only log once per track to reduce noise
+        if (!get().hasRecordedPlay) {
+          console.log('Play recording skipped: not logged in');
+          set({ hasRecordedPlay: true }); // Prevent repeated logs
+        }
         return;
       }
 
