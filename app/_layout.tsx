@@ -1,59 +1,98 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { useEffect, useState } from 'react';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Toast from 'react-native-toast-message';
+import { useAuthStore } from '@/lib/store/authStore';
+import { useNetworkStore } from '@/lib/store/networkStore';
+import { setupPlayer } from '@/lib/audio/trackPlayer';
+import MiniPlayer from '@/components/player/MiniPlayer';
+import { toastConfig } from '@/components/ui/Toast';
+import { theme } from '@/constants/theme';
 
-import { useColorScheme } from '@/components/useColorScheme';
-
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
-
-export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
-};
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
+// Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
+// Custom dark theme matching Palladium aesthetic
+const PalletiumTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: theme.colors.background,
+    card: theme.colors.surface,
+    text: theme.colors.textPrimary,
+    border: theme.colors.border,
+    primary: theme.colors.primary,
+  },
+};
+
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
+  const { checkAuth, isLoading } = useAuthStore();
+  const { initialize: initNetwork } = useNetworkStore();
+  const [playerReady, setPlayerReady] = useState(false);
+
+  const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    ...FontAwesome.font,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+    async function init() {
+      // Initialize auth
+      await checkAuth();
+
+      // Initialize player
+      const ready = await setupPlayer();
+      setPlayerReady(ready);
+    }
+    init();
+
+    // Initialize network monitoring
+    const unsubscribe = initNetwork();
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
-    if (loaded) {
+    if (loaded && !isLoading) {
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
+  }, [loaded, isLoading]);
 
-  if (!loaded) {
+  if (!loaded || isLoading) {
     return null;
   }
 
-  return <RootLayoutNav />;
-}
-
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <ThemeProvider value={PalletiumTheme}>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: theme.colors.background },
+            headerTintColor: theme.colors.textPrimary,
+            contentStyle: { backgroundColor: theme.colors.background },
+          }}
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="player"
+            options={{
+              presentation: 'modal',
+              headerShown: false,
+              gestureEnabled: true,
+              gestureDirection: 'vertical',
+            }}
+          />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+        {/* Mini player shows above tab bar */}
+        <MiniPlayer />
+        {/* Toast notifications */}
+        <Toast config={toastConfig} />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
