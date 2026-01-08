@@ -37,15 +37,19 @@ export default function SearchScreen() {
     setHasSearched(true);
 
     try {
-      const url = `/search?q=${encodeURIComponent(text.trim())}`;
-      console.log('Search URL:', url);
-      const response = await api.get(url);
-      console.log('Search response:', JSON.stringify(response.data));
-      setResults(response.data.tracks || response.data || []);
+      // No search API exists - use discovery and filter client-side
+      const response = await api.get('/discovery/');
+      const allTracks = response.data.tracks || response.data || [];
+      const searchTerm = text.trim().toLowerCase();
+
+      // Filter tracks by title or artist name
+      const filtered = allTracks.filter((track: Track) =>
+        track.title?.toLowerCase().includes(searchTerm) ||
+        track.artist_name?.toLowerCase().includes(searchTerm)
+      );
+
+      setResults(filtered);
     } catch (error: any) {
-      console.log('Search error response:', JSON.stringify(error.response?.data));
-      console.log('Search error status:', error.response?.status);
-      console.log('Search error URL:', error.config?.url);
       console.error('Search failed:', error);
       setResults([]);
     } finally {
