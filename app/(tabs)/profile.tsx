@@ -1,22 +1,22 @@
-import { useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { theme } from '@/constants/theme';
+import api from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useNetworkStore } from '@/lib/store/networkStore';
-import api from '@/lib/api/client';
-import { theme } from '@/constants/theme';
 import type { DashboardStats } from '@/types';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
   const { user, isAuthenticated, logout } = useAuthStore();
@@ -178,6 +178,7 @@ export default function ProfileScreen() {
                   label="Rewards Earned"
                   value={`$${(stats?.total_rewards || 0).toFixed(2)}`}
                   color={theme.colors.success}
+                  onPress={() => router.push('/stats/dividends')}
                 />
                 <StatCard
                   icon="compass"
@@ -219,23 +220,23 @@ export default function ProfileScreen() {
           <MenuItem
             icon="settings-outline"
             label="Settings"
-            onPress={() => {/* TODO */}}
+            onPress={() => {/* TODO */ }}
           />
           <MenuItem
             icon="card-outline"
             label="Subscription"
             sublabel={user.subscription_status === 'active' ? 'Premium' : 'Free'}
-            onPress={() => {/* TODO */}}
+            onPress={() => {/* TODO */ }}
           />
           <MenuItem
             icon="help-circle-outline"
             label="Help & Support"
-            onPress={() => {/* TODO */}}
+            onPress={() => {/* TODO */ }}
           />
           <MenuItem
             icon="information-circle-outline"
             label="About"
-            onPress={() => {/* TODO */}}
+            onPress={() => {/* TODO */ }}
           />
         </View>
 
@@ -253,17 +254,32 @@ export default function ProfileScreen() {
 }
 
 // Helper Components
-function StatCard({ icon, label, value, color }: {
+function StatCard({ icon, label, value, color, onPress }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
   color: string;
+  onPress?: () => void;
 }) {
-  return (
-    <View style={styles.statCard}>
+  const Content = (
+    <>
       <Ionicons name={icon} size={24} color={color} />
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity style={styles.statCard} onPress={onPress}>
+        {Content}
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <View style={styles.statCard}>
+      {Content}
     </View>
   );
 }

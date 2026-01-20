@@ -62,4 +62,24 @@ api.interceptors.response.use(
   }
 );
 
+export const getDividendSummary = async () => {
+  const response = await api.get('/listener/dividends/summary');
+  return response.data;
+};
+
+export const getDividendHistory = async (page = 1, limit = 20) => {
+  const response = await api.get(`/listener/dividends/history?page=${page}&limit=${limit}`);
+  return response.data;
+};
+
+export const getCommunityPosts = async (limit = 20) => {
+  const response = await api.get(`/gamification/community/posts?limit=${limit}`);
+  return response.data;
+};
+
+export const createCommunityPost = async (content: string, type = 'general') => {
+  const response = await api.post('/gamification/community/posts', { content, post_type: type });
+  return response.data;
+};
+
 export default api;

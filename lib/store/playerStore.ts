@@ -1,8 +1,8 @@
-import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
-import api from '../api/client';
+import { create } from 'zustand';
 import type { Track } from '../../types';
 import { getArtistName, getCoverUrl, getDuration } from '../../types';
+import api from '../api/client';
 
 // Lazy load TrackPlayer - allows app to run in Expo Go without native module
 let TrackPlayer: any = null;
@@ -476,6 +476,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           visibilityTime: 3000,
           bottomOffset: 140, // Above mini player
         });
+
+        // Check for Gamification updates (XP gained)
+        // delayed slightly to let the payment toast appear first or stack nicely
+        setTimeout(() => {
+          const { useGamificationStore } = require('./gamificationStore');
+          useGamificationStore.getState().checkForUpdates();
+        }, 1000);
       }
     } catch (error: any) {
       console.log('Record play error response:', JSON.stringify(error.response?.data));

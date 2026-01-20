@@ -1,19 +1,20 @@
-import { useEffect, useState } from 'react';
+import MiniPlayer from '@/components/player/MiniPlayer';
+import SignupPromptModal from '@/components/SignupPromptModal';
+import { toastConfig } from '@/components/ui/Toast';
+import { theme } from '@/constants/theme';
+import { setupPlayer } from '@/lib/audio/trackPlayer';
+import { useAuthStore } from '@/lib/store/authStore';
+import { useGamificationStore } from '@/lib/store/gamificationStore';
+import { useNetworkStore } from '@/lib/store/networkStore';
+import { usePlayerStore } from '@/lib/store/playerStore';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
-import { useAuthStore } from '@/lib/store/authStore';
-import { useNetworkStore } from '@/lib/store/networkStore';
-import { usePlayerStore } from '@/lib/store/playerStore';
-import { setupPlayer } from '@/lib/audio/trackPlayer';
-import MiniPlayer from '@/components/player/MiniPlayer';
-import SignupPromptModal from '@/components/SignupPromptModal';
-import { toastConfig } from '@/components/ui/Toast';
-import { theme } from '@/constants/theme';
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -35,6 +36,7 @@ export default function RootLayout() {
   const { checkAuth, isLoading } = useAuthStore();
   const { initialize: initNetwork } = useNetworkStore();
   const { loadPreviewCount } = usePlayerStore();
+  const { fetchStats } = useGamificationStore();
   const [playerReady, setPlayerReady] = useState(false);
 
   const [loaded] = useFonts({
@@ -48,6 +50,9 @@ export default function RootLayout() {
 
       // Load preview count for free users
       await loadPreviewCount();
+
+      // Initialize gamification stats (for XP tracking)
+      await fetchStats();
 
       // Initialize player
       const ready = await setupPlayer();
