@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '@/lib/api/client';
 import { usePlayerStore } from '@/lib/store/playerStore';
@@ -66,6 +67,10 @@ export default function DiscoverScreen() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const navigateToTrack = (track: Track) => {
+    router.push(`/track/${track.id}` as any);
+  };
+
   const renderTrack = ({ item }: { item: Track }) => {
     const isActive = currentTrack?.id === item.id;
     const coverUrl = getCoverUrl(item);
@@ -76,6 +81,7 @@ export default function DiscoverScreen() {
       <TouchableOpacity
         style={[styles.trackCard, isActive && styles.trackCardActive]}
         onPress={() => handleTrackPress(item)}
+        onLongPress={() => navigateToTrack(item)}
         activeOpacity={0.7}
       >
         <View style={styles.coverContainer}>
@@ -106,7 +112,7 @@ export default function DiscoverScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.moreButton}>
+        <TouchableOpacity style={styles.moreButton} onPress={() => navigateToTrack(item)}>
           <Ionicons name="ellipsis-horizontal" size={20} color={theme.colors.textMuted} />
         </TouchableOpacity>
       </TouchableOpacity>

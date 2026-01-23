@@ -14,19 +14,20 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/lib/store/authStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
-import api from '@/lib/api/client';
+import api, { getLikedTracks } from '@/lib/api/client';
 import { theme } from '@/constants/theme';
 import type { Playlist, Track, RecentPlay } from '@/types';
-import { getArtistName, getCoverUrl } from '@/types';
+import { getArtistName, getCoverUrl, getDuration } from '@/types';
 
 type TabType = 'playlists' | 'history' | 'liked';
 
 export default function LibraryScreen() {
   const { isAuthenticated } = useAuthStore();
-  const { playTrack } = usePlayerStore();
+  const { playTrack, currentTrack, isPlaying, pause, resume } = usePlayerStore();
   const [activeTab, setActiveTab] = useState<TabType>('playlists');
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [history, setHistory] = useState<RecentPlay[]>([]);
+  const [likedTracks, setLikedTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -40,6 +41,9 @@ export default function LibraryScreen() {
       } else if (activeTab === 'history') {
         const response = await api.get('/users/history?limit=50');
         setHistory(response.data.plays || response.data || []);
+      } else if (activeTab === 'liked') {
+        const response = await getLikedTracks();
+        setLikedTracks(response.tracks || response || []);
       }
     } catch (error) {
       console.error('Failed to fetch library data:', error);
@@ -81,7 +85,10 @@ export default function LibraryScreen() {
   }
 
   const renderPlaylist = ({ item }: { item: Playlist }) => (
-    <TouchableOpacity style={styles.playlistCard}>
+    <TouchableOpacity
+      style={styles.playlistCard}
+      onPress={() => router.push(`/playlist/${item.id}` as any)}
+    >
       {item.cover_url ? (
         <Image source={{ uri: item.cover_url }} style={styles.playlistCover} />
       ) : (
@@ -107,6 +114,7 @@ export default function LibraryScreen() {
       <TouchableOpacity
         style={styles.historyItem}
         onPress={() => playTrack(item.track)}
+        onLongPress={() => router.push(`/track/${item.track.id}` as any)}
       >
         {coverUrl ? (
           <Image source={{ uri: coverUrl }} style={styles.historyCover} />
@@ -126,6 +134,65 @@ export default function LibraryScreen() {
             <Text style={styles.firstListenText}>1st</Text>
           </View>
         )}
+      </TouchableOpacity>
+    );
+  };
+
+  const handleTrackPress = async (track: Track) => {
+    if (currentTrack?.id === track.id) {
+      if (isPlaying) {
+        await pause();
+      } else {
+        await resume();
+      }
+    } else {
+      await playTrack(track);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const renderLikedTrack = ({ item }: { item: Track }) => {
+    const coverUrl = getCoverUrl(item);
+    const artistName = getArtistName(item);
+    const duration = getDuration(item);
+    const isActive = currentTrack?.id === item.id;
+
+    return (
+      <TouchableOpacity
+        style={[styles.likedTrackItem, isActive && styles.likedTrackItemActive]}
+        onPress={() => handleTrackPress(item)}
+        onLongPress={() => router.push(`/track/${item.id}` as any)}
+      >
+        {coverUrl ? (
+          <Image source={{ uri: coverUrl }} style={styles.likedTrackCover} />
+        ) : (
+          <View style={[styles.likedTrackCover, styles.likedTrackCoverPlaceholder]}>
+            <Ionicons name="musical-note" size={20} color={theme.colors.textMuted} />
+          </View>
+        )}
+        <View style={styles.likedTrackInfo}>
+          <Text
+            style={[styles.likedTrackTitle, isActive && styles.likedTrackTitleActive]}
+            numberOfLines={1}
+          >
+            {item.title}
+          </Text>
+          <Text style={styles.likedTrackArtist} numberOfLines={1}>
+            {artistName}
+          </Text>
+        </View>
+        <View style={styles.likedTrackRight}>
+          <Text style={styles.likedTrackDuration}>{formatDuration(duration)}</Text>
+          {isActive && isPlaying && (
+            <Ionicons name="volume-high" size={16} color={theme.colors.primary} />
+          )}
+        </View>
+        <Ionicons name="heart" size={18} color={theme.colors.error} style={styles.heartIcon} />
       </TouchableOpacity>
     );
   };
@@ -199,9 +266,28 @@ export default function LibraryScreen() {
           }
         />
       ) : (
-        <View style={styles.emptyList}>
-          <Text style={styles.emptyListText}>Liked tracks coming soon</Text>
-        </View>
+        <FlatList
+          data={likedTracks}
+          renderItem={renderLikedTrack}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyList}>
+              <Ionicons name="heart-outline" size={48} color={theme.colors.textMuted} />
+              <Text style={styles.emptyListText}>No liked tracks yet</Text>
+              <Text style={styles.emptyListSubtext}>
+                Tap the heart icon on any track to save it here
+              </Text>
+            </View>
+          }
+        />
       )}
     </SafeAreaView>
   );
@@ -388,5 +474,58 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
+  },
+  likedTrackItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  likedTrackItemActive: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.sm,
+    borderBottomWidth: 0,
+    marginVertical: 2,
+  },
+  likedTrackCover: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.borderRadius.sm,
+  },
+  likedTrackCoverPlaceholder: {
+    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  likedTrackInfo: {
+    flex: 1,
+    marginLeft: theme.spacing.md,
+  },
+  likedTrackTitle: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.textPrimary,
+  },
+  likedTrackTitleActive: {
+    color: theme.colors.primary,
+  },
+  likedTrackArtist: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textMuted,
+    marginTop: 2,
+  },
+  likedTrackRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  likedTrackDuration: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textMuted,
+  },
+  heartIcon: {
+    marginLeft: theme.spacing.sm,
   },
 });

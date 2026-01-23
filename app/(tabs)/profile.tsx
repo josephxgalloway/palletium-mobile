@@ -5,6 +5,7 @@ import { useNetworkStore } from '@/lib/store/networkStore';
 import type { DashboardStats } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -51,6 +52,10 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  const handleHelpSupport = () => {
+    Linking.openURL('https://palletium.com/support');
   };
 
   // Not authenticated
@@ -178,7 +183,7 @@ export default function ProfileScreen() {
                   label="Rewards Earned"
                   value={`$${(stats?.total_rewards || 0).toFixed(2)}`}
                   color={theme.colors.success}
-                  onPress={() => router.push('/stats/dividends')}
+                  onPress={() => router.push('/stats/dividends' as any)}
                 />
                 <StatCard
                   icon="compass"
@@ -215,28 +220,67 @@ export default function ProfileScreen() {
           </View>
         )}
 
+
+        {/* Artist Studio Button */}
+        {isArtist && !loading && (
+          <TouchableOpacity
+            style={styles.analyticsButton}
+            onPress={() => router.push('/artist/studio' as any)}
+          >
+            <View style={styles.analyticsContent}>
+              <View style={[styles.analyticsIconContainer, { backgroundColor: 'rgba(52, 199, 89, 0.1)' }]}>
+                <Ionicons name="mic-outline" size={24} color={theme.colors.success} />
+              </View>
+              <View style={styles.analyticsTextContainer}>
+                <Text style={styles.analyticsTitle}>Artist Studio</Text>
+                <Text style={styles.analyticsSubtitle}>Manage your tracks and uploads</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Analytics Section */}
+        {!isArtist && !loading && (
+          <TouchableOpacity
+            style={styles.analyticsButton}
+            onPress={() => router.push('/insights/taste' as any)}
+          >
+            <View style={styles.analyticsContent}>
+              <View style={styles.analyticsIconContainer}>
+                <Ionicons name="trending-up" size={24} color={theme.colors.accent} />
+              </View>
+              <View style={styles.analyticsTextContainer}>
+                <Text style={styles.analyticsTitle}>Taste Evolution</Text>
+                <Text style={styles.analyticsSubtitle}>See how your music taste has changed</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Menu Items */}
         <View style={styles.menu}>
           <MenuItem
             icon="settings-outline"
             label="Settings"
-            onPress={() => {/* TODO */ }}
+            onPress={() => router.push('/settings' as any)}
           />
           <MenuItem
             icon="card-outline"
             label="Subscription"
             sublabel={user.subscription_status === 'active' ? 'Premium' : 'Free'}
-            onPress={() => {/* TODO */ }}
+            onPress={() => router.push('/settings/subscription' as any)}
           />
           <MenuItem
             icon="help-circle-outline"
             label="Help & Support"
-            onPress={() => {/* TODO */ }}
+            onPress={handleHelpSupport}
           />
           <MenuItem
             icon="information-circle-outline"
             label="About"
-            onPress={() => {/* TODO */ }}
+            onPress={() => router.push({ pathname: '/settings/legal', params: { type: 'terms' } } as any)}
           />
         </View>
 
@@ -249,7 +293,7 @@ export default function ProfileScreen() {
         {/* Version */}
         <Text style={styles.version}>Palletium v1.0.0</Text>
       </ScrollView>
-    </SafeAreaView>
+    </SafeAreaView >
   );
 }
 
@@ -437,6 +481,40 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.textPrimary,
     marginTop: theme.spacing.xs,
+  },
+  analyticsButton: {
+    marginTop: theme.spacing.lg,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  analyticsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: theme.spacing.md,
+  },
+  analyticsIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.surfaceElevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  analyticsTextContainer: {
+    flex: 1,
+  },
+  analyticsTitle: {
+    color: theme.colors.textPrimary,
+    fontWeight: 'bold',
+    fontSize: theme.fontSize.md,
+  },
+  analyticsSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.xs,
   },
   statLabel: {
     fontSize: theme.fontSize.xs,

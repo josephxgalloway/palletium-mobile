@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Palletium",
-    "slug": "palletium-mobile",
+    "slug": "palletium",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -12,14 +12,24 @@
       "resizeMode": "contain",
       "backgroundColor": "#1A1A1A"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.palletium.mobile",
+      "bundleIdentifier": "com.palletium.app",
       "buildNumber": "1",
       "infoPlist": {
-        "UIBackgroundModes": ["audio", "fetch"],
-        "NSMicrophoneUsageDescription": "Palletium does not require microphone access."
+        "UIBackgroundModes": [
+          "audio",
+          "fetch"
+        ],
+        "NSMicrophoneUsageDescription": "Palletium does not require microphone access.",
+        "NSAppleMusicUsageDescription": "Palletium needs access to play music in the background.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,7 +37,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#1A1A1A"
       },
-      "package": "com.palletium.mobile",
+      "package": "com.palletium.app",
       "versionCode": 1,
       "permissions": [
         "android.permission.INTERNET",
@@ -42,7 +52,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
@@ -52,8 +63,15 @@
         "origin": false
       },
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "YOUR_EAS_PROJECT_ID"
       }
+    },
+    "owner": "palletium",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/YOUR_EAS_PROJECT_ID"
     }
   }
 }

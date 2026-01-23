@@ -98,4 +98,32 @@ export interface Playlist {
   is_public: boolean;
   created_at: string;
   updated_at: string;
+  // Extended fields when fetching single playlist
+  creator_id?: number;
+  creator_name?: string;
+  tracks?: Track[];
+  total_duration?: number;
+  is_owner?: boolean;
+}
+
+export interface Artist {
+  id: number;
+  name: string;
+  handle?: string;
+  bio?: string;
+  profile_image_url?: string;
+  follower_count: number;
+  total_plays: number;
+  level: number;
+  tier?: string;
+  track_count?: number;
+  total_earnings?: number;
+  is_following?: boolean;
+}
+
+export interface TrackInteraction {
+  has_listened: boolean;
+  first_listen_date?: string;
+  play_count: number;
+  is_liked?: boolean;
 }
