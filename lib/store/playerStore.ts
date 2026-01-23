@@ -462,20 +462,49 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       set({ hasRecordedPlay: true });
 
-      // Show payment toast
+      // Show payment toast with LISTENER dividend (not artist payment)
       const Toast = (await import('react-native-toast-message')).default;
       const payment = response.data.payment;
 
       if (payment) {
         const isFirstListen = response.data.is_first_listen;
+        const listenerDividend = payment.listenerDividend || 0;
+        const tierMultiplier = payment.tierMultiplier || 1.0;
+        const listenerTier = payment.listenerTier || 'BRONZE';
+        const isNewArtistDiscovery = isFirstListen;
+
+        // Format tier for display
+        const tierDisplay = listenerTier.charAt(0) + listenerTier.slice(1).toLowerCase();
+
+        // Determine toast type based on discovery
+        const toastType = isNewArtistDiscovery ? 'discovery' : 'payment';
+
         Toast.show({
-          type: 'payment',
-          text1: isFirstListen ? 'First Listen!' : 'Play Recorded',
-          text2: `Artist earned $${payment.artistPayment?.toFixed(2) || '1.00'}`,
+          type: toastType,
+          text1: isNewArtistDiscovery
+            ? `🎉 Discovery! +$${listenerDividend.toFixed(3)}`
+            : `+$${listenerDividend.toFixed(3)}`,
+          text2: tierMultiplier > 1
+            ? `${tierDisplay} tier (${tierMultiplier}x bonus)`
+            : `${tierDisplay} tier`,
           position: 'bottom',
-          visibilityTime: 3000,
+          visibilityTime: 4000,
           bottomOffset: 140, // Above mini player
         });
+
+        // Record payment to history store
+        if (listenerDividend > 0) {
+          const { usePaymentHistoryStore } = await import('./paymentHistoryStore');
+          usePaymentHistoryStore.getState().addPayment({
+            trackId: String(currentTrack.id),
+            trackTitle: currentTrack.title,
+            artistName: getArtistName(currentTrack),
+            amount: listenerDividend,
+            tierMultiplier,
+            isDiscovery: isNewArtistDiscovery,
+            timestamp: new Date().toISOString(),
+          });
+        }
 
         // Check for Gamification updates (XP gained)
         // delayed slightly to let the payment toast appear first or stack nicely

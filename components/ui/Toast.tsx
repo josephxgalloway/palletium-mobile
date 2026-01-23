@@ -82,6 +82,48 @@ export const toastConfig: ToastConfig = {
       }}
     />
   ),
+  discovery: (props) => (
+    <BaseToast
+      {...props}
+      style={{
+        borderLeftColor: '#A855F7', // Purple for discovery
+        backgroundColor: '#2D1B4E', // Dark purple background
+        borderLeftWidth: 4,
+        borderWidth: 1,
+        borderColor: '#A855F7',
+      }}
+      contentContainerStyle={{ paddingHorizontal: 15 }}
+      text1Style={{
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#E9D5FF', // Light purple
+      }}
+      text2Style={{
+        fontSize: 13,
+        color: '#C4B5FD',
+      }}
+    />
+  ),
+  artistPlay: (props) => (
+    <BaseToast
+      {...props}
+      style={{
+        borderLeftColor: '#10B981', // Emerald for artist income
+        backgroundColor: '#1A2E28', // Dark emerald background
+        borderLeftWidth: 4,
+      }}
+      contentContainerStyle={{ paddingHorizontal: 15 }}
+      text1Style={{
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#6EE7B7', // Light emerald
+      }}
+      text2Style={{
+        fontSize: 13,
+        color: '#A7F3D0',
+      }}
+    />
+  ),
 };
 
 export { Toast };
