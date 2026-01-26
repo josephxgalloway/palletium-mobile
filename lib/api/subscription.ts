@@ -107,14 +107,53 @@ export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
 
 /**
  * Get current subscription status
+ *
+ * Backend endpoint: GET /api/subscriptions/status
+ * Response: { ok, subscribed, status, tier, interval, currentPeriodEnd, cancelAtPeriodEnd }
  */
 export const getSubscriptionStatus = async (): Promise<SubscriptionStatus> => {
   const response = await api.get('/subscriptions/status');
-  return response.data;
+  const data = response.data;
+
+  // Map backend response to mobile format
+  if (!data.ok && data.error) {
+    throw new Error(data.error);
+  }
+
+  // Map 'none' status from backend when not subscribed
+  const status = data.subscribed
+    ? (data.status as SubscriptionStatus['status'])
+    : 'none';
+
+  // Build plan object if subscribed
+  let plan: SubscriptionPlan | undefined;
+  if (data.subscribed && data.tier) {
+    const planKey = `listener_${data.tier}_${data.interval === 'year' ? 'yearly' : 'monthly'}`;
+    plan = SUBSCRIPTION_PLANS[planKey] || {
+      id: planKey,
+      name: data.tier.charAt(0).toUpperCase() + data.tier.slice(1),
+      description: '',
+      price: 0,
+      interval: data.interval || 'month',
+      features: [],
+      stripePriceId: '',
+    };
+  }
+
+  return {
+    status,
+    plan,
+    currentPeriodEnd: data.currentPeriodEnd || undefined,
+    cancelAtPeriodEnd: data.cancelAtPeriodEnd || false,
+  };
 };
 
 /**
  * Create a Stripe checkout session for subscription
+ *
+ * Backend endpoint: POST /api/subscriptions/checkout
+ * Request: { planId, successUrl?, cancelUrl? }
+ * Response: { ok, sessionId, url }
  */
 export const createCheckoutSession = async (
   planId: string,
@@ -126,11 +165,24 @@ export const createCheckoutSession = async (
     successUrl: successUrl || 'palletium://subscription/success',
     cancelUrl: cancelUrl || 'palletium://subscription/cancel',
   });
-  return response.data;
+
+  const data = response.data;
+  if (!data.ok) {
+    throw new Error(data.error || 'Failed to create checkout session');
+  }
+
+  return {
+    sessionId: data.sessionId,
+    url: data.url,
+  };
 };
 
 /**
  * Get Stripe customer portal URL for managing subscription
+ *
+ * Backend endpoint: POST /api/subscriptions/portal
+ * Request: { returnUrl? }
+ * Response: { ok, url }
  */
 export const getCustomerPortal = async (
   returnUrl?: string
@@ -138,7 +190,15 @@ export const getCustomerPortal = async (
   const response = await api.post('/subscriptions/portal', {
     returnUrl: returnUrl || 'palletium://settings/subscription',
   });
-  return response.data;
+
+  const data = response.data;
+  if (!data.ok) {
+    throw new Error(data.error || 'Failed to get customer portal');
+  }
+
+  return {
+    url: data.url,
+  };
 };
 
 /**

@@ -109,7 +109,7 @@ export default function SubscriptionScreen() {
       Toast.show({
         type: 'error',
         text1: 'Checkout failed',
-        text2: error.response?.data?.message || 'Please try again later',
+        text2: error.message || error.response?.data?.error || 'Please try again later',
       });
     } finally {
       setCheckoutLoading(false);
@@ -130,7 +130,7 @@ export default function SubscriptionScreen() {
       Toast.show({
         type: 'error',
         text1: 'Failed to open billing portal',
-        text2: error.response?.data?.message || 'Please try again later',
+        text2: error.message || error.response?.data?.error || 'Please try again later',
       });
     } finally {
       setPortalLoading(false);
