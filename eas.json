@@ -42,9 +42,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "joseph@palletium.com",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "YOUR_APPLE_TEAM_ID"
+        "appleId": "josephdgalloway@icloud.com",
+        "ascAppId": "6758324413",
+        "appleTeamId": "YA3THH7C6Z"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",

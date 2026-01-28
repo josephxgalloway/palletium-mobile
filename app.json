@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Palletium",
-    "slug": "palletium",
+    "slug": "palletium-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -25,6 +25,8 @@
           "fetch"
         ],
         "NSMicrophoneUsageDescription": "Palletium does not require microphone access.",
+        "NSCameraUsageDescription": "Palletium uses the camera to let you upload a profile picture.",
+        "NSPhotoLibraryUsageDescription": "Palletium accesses your photos to let you upload a profile picture.",
         "NSAppleMusicUsageDescription": "Palletium needs access to play music in the background.",
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -63,10 +65,10 @@
         "origin": false
       },
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "9c102464-a6ad-4b18-a401-bf1973328fe2"
       }
     },
-    "owner": "palletium",
+    "owner": "josephxgalloway",
     "runtimeVersion": {
       "policy": "appVersion"
     },
