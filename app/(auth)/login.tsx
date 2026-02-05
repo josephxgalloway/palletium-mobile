@@ -13,43 +13,205 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '@/lib/store/authStore';
+import api from '@/lib/api/client';
 import { theme } from '@/constants/theme';
+
+// Ensure browser is dismissed when returning
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const {
+    login,
+    verify2FA,
+    cancel2FA,
+    isLoading,
+    error,
+    clearError,
+    requires2FA
+  } = useAuthStore();
 
   const handleLogin = async () => {
-    const success = await login(email, password);
+    const result = await login(email, password);
+    if (result === true) {
+      router.replace('/(tabs)');
+    }
+    // If result === '2fa', the store will set requires2FA = true
+    // and we'll show the 2FA verification screen
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    clearError();
+
+    try {
+      // Get the auth URL from backend
+      const response = await api.get('/oauth/google/authorize');
+      const { authUrl, state } = response.data;
+
+      if (!authUrl) {
+        throw new Error('Failed to get authentication URL');
+      }
+
+      // Open Google auth in browser
+      const result = await WebBrowser.openAuthSessionAsync(
+        authUrl,
+        'palletium://oauth/callback'
+      );
+
+      if (result.type === 'success' && result.url) {
+        // Parse the callback URL
+        const url = new URL(result.url);
+        const code = url.searchParams.get('code');
+        const returnedState = url.searchParams.get('state');
+
+        if (code && returnedState === state) {
+          // Exchange code for token
+          const tokenResponse = await api.post('/oauth/google/callback', {
+            code,
+            state: returnedState,
+            redirectUri: 'palletium://oauth/callback',
+          });
+
+          const data = tokenResponse.data;
+          const accessToken = data.accessToken || data.token;
+          const refreshToken = data.refreshToken || '';
+          const user = data.user;
+
+          if (accessToken) {
+            await SecureStore.setItemAsync('accessToken', accessToken);
+            if (refreshToken) {
+              await SecureStore.setItemAsync('refreshToken', refreshToken);
+            }
+
+            // Update auth store
+            useAuthStore.setState({
+              user,
+              isAuthenticated: true,
+              isLoading: false,
+            });
+
+            router.replace('/(tabs)');
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Google Sign In error:', error);
+      useAuthStore.setState({
+        error: error.response?.data?.message || 'Google Sign In failed. Please try again.',
+      });
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async () => {
+    const success = await verify2FA(twoFactorCode);
     if (success) {
       router.replace('/(tabs)');
     }
   };
 
-  const isValid = email.length > 0 && password.length > 0;
+  const handleCancel2FA = () => {
+    cancel2FA();
+    setTwoFactorCode('');
+  };
 
+  const isValid = email.length > 0 && password.length > 0;
+  const is2FAValid = twoFactorCode.length >= 6;
+
+  // 2FA Verification Screen
+  if (requires2FA) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.content}
+        >
+          <View style={styles.header}>
+            <View style={styles.twoFactorIcon}>
+              <Ionicons name="shield-checkmark" size={48} color={theme.colors.primary} />
+            </View>
+            <Text style={styles.title}>Two-Factor Authentication</Text>
+            <Text style={styles.tagline}>
+              Enter the 6-digit code from your authenticator app or use a backup code
+            </Text>
+          </View>
+
+          <View style={styles.form}>
+            {error && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={20} color={theme.colors.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            <View style={styles.inputContainer}>
+              <Ionicons name="keypad" size={20} color={theme.colors.textMuted} />
+              <TextInput
+                style={[styles.input, styles.codeInput]}
+                placeholder="Enter code"
+                placeholderTextColor={theme.colors.textMuted}
+                value={twoFactorCode}
+                onChangeText={(text) => {
+                  setTwoFactorCode(text.replace(/[^a-zA-Z0-9]/g, ''));
+                  clearError();
+                }}
+                keyboardType="number-pad"
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={8}
+                autoFocus
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, !is2FAValid && styles.buttonDisabled]}
+              onPress={handleVerify2FA}
+              disabled={isLoading || !is2FAValid}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={theme.colors.background} />
+              ) : (
+                <Text style={styles.buttonText}>Verify</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={handleCancel2FA}
+              disabled={isLoading}
+            >
+              <Ionicons name="arrow-back" size={18} color={theme.colors.textSecondary} />
+              <Text style={styles.backButtonText}>Back to Login</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  // Standard Login Screen
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
-
         <View style={styles.header}>
           <Image
-            source={require('@/assets/images/logo.png')}
+            source={require('@/assets/images/icon.png')}
             style={styles.logo}
             resizeMode="contain"
           />
+          <Text style={styles.title}>Palletium</Text>
           <Text style={styles.tagline}>Stream music. Earn rewards.</Text>
         </View>
 
@@ -60,6 +222,32 @@ export default function LoginScreen() {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
+
+          {/* Google Sign In Button */}
+          <TouchableOpacity
+            style={styles.googleButton}
+            onPress={handleGoogleSignIn}
+            disabled={googleLoading || isLoading}
+          >
+            {googleLoading ? (
+              <ActivityIndicator color={theme.colors.textPrimary} />
+            ) : (
+              <>
+                <Image
+                  source={{ uri: 'https://www.google.com/favicon.ico' }}
+                  style={styles.googleIcon}
+                />
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
           <View style={styles.inputContainer}>
             <Ionicons name="mail" size={20} color={theme.colors.textMuted} />
@@ -135,25 +323,39 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: theme.spacing.xl,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-  },
   header: {
     alignItems: 'center',
     marginTop: theme.spacing.xxl,
-    marginBottom: theme.spacing.xxl,
+    marginBottom: theme.spacing.xl,
   },
   logo: {
-    width: '70%',
-    height: 50,
+    width: 100,
+    height: 100,
+    borderRadius: 20,
     alignSelf: 'center',
+  },
+  twoFactorIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(184, 134, 11, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
+  title: {
+    fontSize: theme.fontSize.xxxl,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.textPrimary,
+    marginTop: theme.spacing.md,
+    textAlign: 'center',
   },
   tagline: {
     fontSize: theme.fontSize.md,
     color: theme.colors.textSecondary,
-    marginTop: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+    textAlign: 'center',
+    paddingHorizontal: theme.spacing.lg,
   },
   form: {
     gap: theme.spacing.md,
@@ -173,6 +375,41 @@ const styles = StyleSheet.create({
     color: theme.colors.error,
     fontSize: theme.fontSize.sm,
   },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    gap: theme.spacing.sm,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+  },
+  googleButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: theme.spacing.sm,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.colors.border,
+  },
+  dividerText: {
+    color: theme.colors.textMuted,
+    paddingHorizontal: theme.spacing.md,
+    fontSize: theme.fontSize.sm,
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -189,12 +426,18 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     color: theme.colors.textPrimary,
   },
+  codeInput: {
+    textAlign: 'center',
+    fontSize: theme.fontSize.xl,
+    letterSpacing: 4,
+    fontWeight: '600',
+  },
   button: {
     backgroundColor: theme.colors.primary,
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
     alignItems: 'center',
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing.sm,
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -204,10 +447,21 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.semibold,
   },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  backButtonText: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.md,
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: theme.spacing.xl,
+    marginTop: theme.spacing.lg,
   },
   footerText: {
     color: theme.colors.textSecondary,

@@ -383,3 +383,63 @@ The app is **ready for TestFlight** with current features:
 - Metadata editor (complex UI)
 - Track upload (large files)
 - Sync licensing (niche B2B)
+
+---
+
+## Changelog
+
+### January 30, 2026 - Bug Fixes & UI Polish
+
+**Bug Fixes (10 items):**
+
+| Issue | Fix | Files Changed |
+|-------|-----|---------------|
+| App accessible without auth | Added auth redirect in tab layout | `app/(tabs)/_layout.tsx` |
+| Profile upload count inaccurate | Use `getArtistTracks(user.id)` with response normalization | `app/(tabs)/profile.tsx` |
+| Artist Studio "failed to fetch tracks" | Use `getArtistTracks(user.id)` directly with `useFocusEffect` | `app/artist/studio.tsx` |
+| Journey "failed to fetch leaderboards" | Silenced error, updated empty state text | `app/journey/index.tsx` |
+| Milestones shows "No badges available" | Changed to "Milestones coming soon" | `app/journey/index.tsx` |
+| Community shows "Leaderboard coming soon" | Changed to "Community coming soon" | `app/journey/index.tsx` |
+| Player shows hourglass during playback | Only show buffering when `position < 1` | `hooks/useTrackProgress.ts` |
+| "View Artist" button broken | Added proper navigation with modal close | `app/player.tsx` |
+| Artist earnings showing $0.00 | Normalize API field names (`total_revenue` → `total_earnings`) | `app/(tabs)/profile.tsx`, `types/index.ts` |
+| Dashboard response wrapper | Handle both `{stats: {...}}` and direct `{...}` responses | `app/(tabs)/profile.tsx` |
+
+**UI/Branding Updates:**
+
+| Change | Description | Files Changed |
+|--------|-------------|---------------|
+| Login page image | Changed from logo.png to icon.png with "Palletium" title | `app/(auth)/login.tsx` |
+| Header style consistency | Library & Community headers now match Discover style | `app/(tabs)/library.tsx`, `app/(tabs)/community.tsx` |
+| Community → Journey tab | Replaced Community tab with Journey (tier/level progress) | `app/(tabs)/_layout.tsx`, `app/(tabs)/journey.tsx` |
+
+**Header Style Standard:**
+All tab pages now use consistent header styling:
+- Large title: `fontSize.xxxl`, `fontWeight.bold`
+- Subtitle: `fontSize.md`, `textSecondary` color
+- Padding: `theme.spacing.lg` with `paddingBottom: theme.spacing.md`
+- No border/banner
+
+**API Field Normalization:**
+The mobile app now normalizes API field names to handle differences between web and mobile expectations:
+| API Field | Mobile Field | Description |
+|-----------|--------------|-------------|
+| `total_revenue` | `total_earnings` | Artist earnings |
+| `pending_revenue` | `pending_earnings` | Pending artist earnings |
+| `total_tracks` | `track_count` | Number of tracks |
+| `{stats: {...}}` | `{...}` | Dashboard response unwrapping |
+
+**Files Changed Summary:**
+- `app/(tabs)/_layout.tsx` - Auth guard redirect, Community→Journey tab swap
+- `app/(tabs)/profile.tsx` - Track count fetching, earnings normalization, dashboard response handling
+- `app/(tabs)/library.tsx` - Header style update
+- `app/(tabs)/community.tsx` - Header style update (now hidden)
+- `app/(tabs)/journey.tsx` - **NEW** Journey tab with tier/level progress
+- `app/(tabs)/index.tsx` - Discover page with Mood Radio and search
+- `app/(auth)/login.tsx` - Branding update (icon.png + "Palletium" title)
+- `app/journey/index.tsx` - Terminology fixes (badges→milestones, leaderboard→community)
+- `app/player.tsx` - View Artist navigation fix
+- `app/artist/studio.tsx` - Use `getArtistTracks(user.id)` with `useFocusEffect`
+- `hooks/useTrackProgress.ts` - Buffering state fix
+- `lib/api/client.ts` - Added logging, `getArtistTracks` improvements
+- `types/index.ts` - Added alternative API field names to `DashboardStats`

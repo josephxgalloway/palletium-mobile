@@ -101,10 +101,35 @@ export const createSubscriptionSession = async (interval: 'month' | 'year' = 'mo
   return response.data;
 };
 
-// Artist Studio
+// Artist Studio - Get current user's tracks
 export const getMyTracks = async () => {
-  const response = await api.get('/tracks/my');
-  return response.data;
+  try {
+    // Try the /tracks/my endpoint first
+    console.log('getMyTracks: Trying /tracks/my');
+    const response = await api.get('/tracks/my');
+    console.log('getMyTracks: /tracks/my response:', JSON.stringify(response.data, null, 2));
+    return response.data;
+  } catch (error: any) {
+    console.log('getMyTracks: /tracks/my failed with status:', error.response?.status);
+    // If endpoint doesn't exist (404) or server error, fall back to /artists/:id/tracks
+    if (error.response?.status === 404 || error.response?.status === 500) {
+      try {
+        // Get user info to get their artist ID
+        console.log('getMyTracks: Trying fallback via /auth/me');
+        const meResponse = await api.get('/auth/me');
+        const userId = meResponse.data?.user?.id || meResponse.data?.id;
+        console.log('getMyTracks: Got user ID:', userId);
+        if (userId) {
+          const tracksResponse = await api.get(`/artists/${userId}/tracks`);
+          console.log('getMyTracks: /artists/:id/tracks response:', JSON.stringify(tracksResponse.data, null, 2));
+          return tracksResponse.data;
+        }
+      } catch (fallbackError) {
+        console.error('getMyTracks: Fallback tracks fetch failed:', fallbackError);
+      }
+    }
+    throw error;
+  }
 };
 
 export const updateTrack = async (id: number, data: { title?: string, genre?: string, is_public?: boolean }) => {
@@ -145,7 +170,9 @@ export const getArtist = async (id: number) => {
 };
 
 export const getArtistTracks = async (id: number, limit = 50) => {
+  console.log('getArtistTracks: Fetching tracks for artist ID:', id);
   const response = await api.get(`/artists/${id}/tracks?limit=${limit}`);
+  console.log('getArtistTracks: Response:', JSON.stringify(response.data, null, 2));
   return response.data;
 };
 

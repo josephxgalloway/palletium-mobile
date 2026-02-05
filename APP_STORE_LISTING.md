@@ -7,7 +7,7 @@ Palletium - Music That Pays
 Stream music. Earn rewards.
 
 ## Promotional Text (170 chars - can update without review)
-Discover amazing independent artists and earn dividends for every new song you find. Artists earn $1 per first listen - 200× more than other platforms.
+Discover amazing independent artists and earn rewards for every new song you find. Verified artists earn $1 per first listen - 200× more than other platforms.
 
 ## Description (4000 chars max)
 
@@ -15,17 +15,17 @@ Palletium is the music streaming platform that pays artists fairly and rewards y
 
 **FOR LISTENERS**
 
-• Earn dividend rewards for every new artist you discover
-• Premium members earn 1.5× dividend rate
+• Earn rewards for every new artist you discover
+• Premium members earn 1.5× rewards rate
 • Progress through listener tiers: Bronze → Silver → Gold → Platinum → Diamond
-• Complete quests and earn badges for your music journey
+• Complete goals and reach milestones on your music journey
 • Build playlists and share your discoveries
 
 **FOR ARTISTS**
 
-• Earn $1.00 for every first listen (200× the industry average)
+• Verified artists earn $1.00 per first listen (200× the industry average)
 • Earn $0.01 for every repeat listen
-• Keep 70% of all earnings - no hidden fees
+• Get verified for $49.99/year to unlock full rates and unlimited uploads
 • Access detailed analytics on your audience
 • Level up from Emerging to Icon status
 
@@ -51,7 +51,7 @@ Palletium is currently in beta. Join now to be among the first to experience a f
 Download now and start discovering music that matters.
 
 ## Keywords (100 chars max, comma-separated)
-music,streaming,artists,earnings,dividends,discover,independent,fair pay,rewards,songs
+music,streaming,artists,earnings,rewards,discover,independent,fair pay,songs,verified
 
 ## Primary Category
 Music
@@ -100,7 +100,7 @@ Initial release - Welcome to Palletium!
 2. Now Playing screen - "Premium audio experience"
 3. Library screen - "Your music, organized"
 4. Artist profile - "Support artists directly"
-5. Earnings/Dividends - "Watch your rewards grow"
+5. Earnings/Rewards - "Watch your rewards grow"
 
 ---
 

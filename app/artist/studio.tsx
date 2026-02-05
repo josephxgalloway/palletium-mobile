@@ -1,9 +1,10 @@
 import { theme } from '@/constants/theme';
-import { getMyTracks, updateTrack } from '@/lib/api/client';
+import { getArtistTracks } from '@/lib/api/client';
+import { useAuthStore } from '@/lib/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Stack, router, useFocusEffect } from 'expo-router';
+import { useState, useCallback } from 'react';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
@@ -18,68 +19,59 @@ interface Track {
 }
 
 export default function ArtistStudioScreen() {
+    const { user } = useAuthStore();
     const [tracks, setTracks] = useState<Track[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
-    const [editModalVisible, setEditModalVisible] = useState(false);
 
-    // Edit Form State
-    const [editTitle, setEditTitle] = useState('');
-    const [editGenre, setEditGenre] = useState('');
-    const [editIsPublic, setEditIsPublic] = useState(false);
-    const [saving, setSaving] = useState(false);
+    const fetchTracks = useCallback(async () => {
+        if (!user?.id) {
+            setLoading(false);
+            return;
+        }
 
-    useEffect(() => {
-        fetchTracks();
-    }, []);
-
-    const fetchTracks = async () => {
         try {
-            const data = await getMyTracks();
-            setTracks(data.tracks);
-        } catch (error) {
-            console.error('Failed to fetch tracks:', error);
-            Toast.show({ type: 'error', text1: 'Failed to load tracks' });
+            console.log('ArtistStudio: Fetching tracks for user ID:', user.id);
+            const data = await getArtistTracks(user.id);
+
+            // Handle various response formats
+            let trackList: Track[] = [];
+            if (Array.isArray(data)) {
+                trackList = data;
+            } else if (data?.tracks && Array.isArray(data.tracks)) {
+                trackList = data.tracks;
+            } else if (data?.data && Array.isArray(data.data)) {
+                trackList = data.data;
+            }
+
+            console.log('ArtistStudio: Found', trackList.length, 'tracks');
+            setTracks(trackList);
+        } catch (error: any) {
+            console.error('ArtistStudio: Failed to fetch tracks:', error);
+            const errorMessage = error.response?.data?.error || error.message || 'Failed to load tracks';
+            Toast.show({ type: 'error', text1: 'Error', text2: errorMessage });
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    };
+    }, [user?.id]);
 
-    const handleEdit = (track: Track) => {
-        setSelectedTrack(track);
-        setEditTitle(track.title);
-        setEditGenre(track.genre);
-        setEditIsPublic(track.is_public);
-        setEditModalVisible(true);
-    };
+    // Refresh tracks when screen is focused (e.g., after editing)
+    useFocusEffect(
+        useCallback(() => {
+            fetchTracks();
+        }, [fetchTracks])
+    );
 
-    const saveChanges = async () => {
-        if (!selectedTrack) return;
-        setSaving(true);
-        try {
-            await updateTrack(selectedTrack.id, {
-                title: editTitle,
-                genre: editGenre,
-                is_public: editIsPublic
-            });
-
-            Toast.show({ type: 'success', text1: 'Track updated' });
-            setEditModalVisible(false);
-            fetchTracks(); // Refresh list
-        } catch (error) {
-            Alert.alert('Error', 'Failed to save changes');
-        } finally {
-            setSaving(false);
-        }
+    const handleEditTrack = (track: Track) => {
+        router.push(`/artist/track/${track.id}/edit` as any);
     };
 
     const renderTrackItem = ({ item }: { item: Track }) => (
-        <TouchableOpacity style={styles.trackCard} onPress={() => handleEdit(item)}>
+        <TouchableOpacity style={styles.trackCard} onPress={() => handleEditTrack(item)}>
             <View style={styles.trackInfo}>
                 <Text style={styles.trackTitle}>{item.title}</Text>
-                <Text style={styles.trackMeta}>{item.genre} • {item.play_count} plays</Text>
+                <Text style={styles.trackMeta}>{item.genre || 'No genre'} • {item.play_count} plays</Text>
             </View>
 
             <View style={styles.statusContainer}>
@@ -98,7 +90,13 @@ export default function ArtistStudioScreen() {
                         <Text style={styles.badgeText}>{item.is_public ? 'Public' : 'Private'}</Text>
                     </View>
                 )}
-                <Ionicons name="create-outline" size={20} color={theme.colors.textMuted} style={{ marginLeft: 8 }} />
+                <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => handleEditTrack(item)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <Ionicons name="pencil" size={18} color={theme.colors.primary} />
+                </TouchableOpacity>
             </View>
         </TouchableOpacity>
     );
@@ -125,69 +123,25 @@ export default function ArtistStudioScreen() {
                     renderItem={renderTrackItem}
                     keyExtractor={(item) => item.id.toString()}
                     contentContainerStyle={styles.listContent}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTracks(); }} tintColor={theme.colors.primary} />}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={() => {
+                                setRefreshing(true);
+                                fetchTracks();
+                            }}
+                            tintColor={theme.colors.primary}
+                        />
+                    }
                     ListEmptyComponent={
                         <View style={styles.center}>
-                            <Text style={styles.emptyText}>No tracks uploaded yet.</Text>
-                            <Text style={styles.emptySubtext}>Upload tracks via the web platform.</Text>
+                            <Ionicons name="musical-notes-outline" size={48} color={theme.colors.textMuted} />
+                            <Text style={styles.emptyText}>No tracks uploaded yet</Text>
+                            <Text style={styles.emptySubtext}>Upload tracks via the web platform</Text>
                         </View>
                     }
                 />
             )}
-
-            {/* Edit Modal */}
-            <Modal
-                visible={editModalVisible}
-                animationType="slide"
-                presentationStyle="pageSheet"
-                onRequestClose={() => setEditModalVisible(false)}
-            >
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Edit Track</Text>
-                        <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                            <Text style={styles.cancelText}>Cancel</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.form}>
-                        <Text style={styles.label}>Title</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={editTitle}
-                            onChangeText={setEditTitle}
-                            placeholderTextColor={theme.colors.textMuted}
-                        />
-
-                        <Text style={styles.label}>Genre</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={editGenre}
-                            onChangeText={setEditGenre}
-                            placeholderTextColor={theme.colors.textMuted}
-                        />
-
-                        <View style={styles.switchRow}>
-                            <Text style={styles.label}>Public Visibility</Text>
-                            <TouchableOpacity
-                                onPress={() => setEditIsPublic(!editIsPublic)}
-                                style={[styles.toggle, editIsPublic && styles.toggleActive]}
-                            >
-                                <View style={[styles.thumb, editIsPublic && styles.thumbActive]} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <TouchableOpacity
-                            style={styles.saveButton}
-                            onPress={saveChanges}
-                            disabled={saving}
-                        >
-                            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Changes</Text>}
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
         </SafeAreaView>
     );
 }
@@ -222,6 +176,7 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: theme.spacing.md,
+        flexGrow: 1,
     },
     trackCard: {
         flexDirection: 'row',
@@ -234,6 +189,7 @@ const styles = StyleSheet.create({
     },
     trackInfo: {
         flex: 1,
+        marginRight: theme.spacing.sm,
     },
     trackTitle: {
         fontSize: theme.fontSize.md,
@@ -248,6 +204,7 @@ const styles = StyleSheet.create({
     statusContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: theme.spacing.sm,
     },
     badge: {
         paddingHorizontal: 8,
@@ -259,89 +216,23 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#fff',
     },
+    editButton: {
+        width: 36,
+        height: 36,
+        borderRadius: theme.borderRadius.sm,
+        backgroundColor: theme.colors.surfaceElevated,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     emptyText: {
         fontSize: theme.fontSize.lg,
         color: theme.colors.textPrimary,
         fontWeight: 'bold',
+        marginTop: theme.spacing.md,
     },
     emptySubtext: {
         fontSize: theme.fontSize.sm,
         color: theme.colors.textSecondary,
-        marginTop: 8,
-    },
-    // Modal Styles
-    modalContainer: {
-        flex: 1,
-        backgroundColor: theme.colors.surface,
-        padding: theme.spacing.lg,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: theme.spacing.xl,
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: theme.colors.textPrimary,
-    },
-    cancelText: {
-        color: theme.colors.primary,
-        fontSize: 16,
-    },
-    form: {
-        gap: theme.spacing.lg,
-    },
-    label: {
-        fontSize: theme.fontSize.sm,
-        fontWeight: 'bold',
-        color: theme.colors.textSecondary,
-        marginBottom: theme.spacing.xs,
-    },
-    input: {
-        backgroundColor: theme.colors.background,
-        padding: theme.spacing.md,
-        borderRadius: theme.borderRadius.md,
-        color: theme.colors.textPrimary,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-    },
-    switchRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: theme.spacing.md,
-    },
-    toggle: {
-        width: 50,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: theme.colors.surfaceElevated,
-        padding: 2,
-    },
-    toggleActive: {
-        backgroundColor: theme.colors.success,
-    },
-    thumb: {
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        backgroundColor: '#fff',
-    },
-    thumbActive: {
-        transform: [{ translateX: 20 }],
-    },
-    saveButton: {
-        backgroundColor: theme.colors.primary,
-        padding: theme.spacing.md,
-        borderRadius: theme.borderRadius.md,
-        alignItems: 'center',
-        marginTop: theme.spacing.xl,
-    },
-    saveButtonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 16,
+        marginTop: theme.spacing.xs,
     },
 });

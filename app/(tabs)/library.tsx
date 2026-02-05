@@ -8,6 +8,9 @@ import {
   RefreshControl,
   ActivityIndicator,
   Image,
+  TextInput,
+  Keyboard,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -18,8 +21,9 @@ import api, { getLikedTracks } from '@/lib/api/client';
 import { theme } from '@/constants/theme';
 import type { Playlist, Track, RecentPlay } from '@/types';
 import { getArtistName, getCoverUrl, getDuration } from '@/types';
+import Toast from 'react-native-toast-message';
 
-type TabType = 'playlists' | 'history' | 'liked';
+type TabType = 'playlists' | 'history' | 'liked' | 'search';
 
 export default function LibraryScreen() {
   const { isAuthenticated } = useAuthStore();
@@ -31,6 +35,16 @@ export default function LibraryScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  // Create Playlist Modal
+  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [creatingPlaylist, setCreatingPlaylist] = useState(false);
+
   const fetchData = useCallback(async () => {
     if (!isAuthenticated) return;
 
@@ -39,11 +53,21 @@ export default function LibraryScreen() {
         const response = await api.get('/playlists');
         setPlaylists(response.data.playlists || response.data || []);
       } else if (activeTab === 'history') {
-        const response = await api.get('/users/history?limit=50');
-        setHistory(response.data.plays || response.data || []);
+        try {
+          const response = await api.get('/users/history?limit=50');
+          setHistory(response.data.plays || response.data?.history || response.data || []);
+        } catch {
+          // Silently handle - endpoint may not be implemented yet
+          setHistory([]);
+        }
       } else if (activeTab === 'liked') {
-        const response = await getLikedTracks();
-        setLikedTracks(response.tracks || response || []);
+        try {
+          const response = await getLikedTracks();
+          setLikedTracks(response.tracks || response.data?.tracks || response || []);
+        } catch {
+          // Silently handle - endpoint may not be implemented yet
+          setLikedTracks([]);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch library data:', error);
@@ -62,6 +86,65 @@ export default function LibraryScreen() {
     await fetchData();
     setRefreshing(false);
   }, [fetchData]);
+
+  // Search function
+  const handleSearch = useCallback(async (text: string) => {
+    setSearchQuery(text);
+
+    if (text.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+
+    try {
+      const response = await api.get('/discovery/');
+      const allTracks = response.data.tracks || response.data || [];
+      const searchTerm = text.trim().toLowerCase();
+
+      const filtered = allTracks.filter((track: Track) =>
+        track.title?.toLowerCase().includes(searchTerm) ||
+        getArtistName(track).toLowerCase().includes(searchTerm)
+      );
+
+      setSearchResults(filtered);
+    } catch (error) {
+      console.error('Search failed:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  // Create playlist function
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistName.trim()) {
+      Toast.show({ type: 'error', text1: 'Please enter a playlist name' });
+      return;
+    }
+
+    setCreatingPlaylist(true);
+    try {
+      await api.post('/playlists', {
+        name: newPlaylistName.trim(),
+        description: '',
+        is_public: false,
+      });
+      Toast.show({ type: 'success', text1: 'Playlist created!' });
+      setShowCreatePlaylist(false);
+      setNewPlaylistName('');
+      fetchData(); // Refresh playlists
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Failed to create playlist',
+        text2: error.response?.data?.error || error.message,
+      });
+    } finally {
+      setCreatingPlaylist(false);
+    }
+  };
 
   // Not authenticated
   if (!isAuthenticated) {
@@ -197,30 +280,138 @@ export default function LibraryScreen() {
     );
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Your Library</Text>
+  const formatDurationSearch = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        <TabButton
-          label="Playlists"
-          active={activeTab === 'playlists'}
-          onPress={() => setActiveTab('playlists')}
-        />
-        <TabButton
-          label="History"
-          active={activeTab === 'history'}
-          onPress={() => setActiveTab('history')}
-        />
-        <TabButton
-          label="Liked"
-          active={activeTab === 'liked'}
-          onPress={() => setActiveTab('liked')}
-        />
+  const renderSearchResult = ({ item }: { item: Track }) => {
+    const isActive = currentTrack?.id === item.id;
+    const coverUrl = getCoverUrl(item);
+    const artistName = getArtistName(item);
+
+    return (
+      <TouchableOpacity
+        style={[styles.historyItem, isActive && styles.likedTrackItemActive]}
+        onPress={() => {
+          Keyboard.dismiss();
+          playTrack(item);
+        }}
+      >
+        {coverUrl ? (
+          <Image source={{ uri: coverUrl }} style={styles.historyCover} />
+        ) : (
+          <View style={[styles.historyCover, styles.historyCoverPlaceholder]}>
+            <Ionicons name="musical-note" size={18} color={theme.colors.textMuted} />
+          </View>
+        )}
+        <View style={styles.historyInfo}>
+          <Text style={[styles.historyTitle, isActive && styles.likedTrackTitleActive]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={styles.historyArtist} numberOfLines={1}>
+            {artistName} • {formatDurationSearch(getDuration(item))}
+          </Text>
+        </View>
+        {isActive && isPlaying && (
+          <Ionicons name="volume-high" size={18} color={theme.colors.primary} />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>Your Library</Text>
+          <Text style={styles.subtitle}>Playlists, history & favorites</Text>
+        </View>
+        {isAuthenticated && activeTab === 'playlists' && (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setShowCreatePlaylist(true)}
+          >
+            <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {loading ? (
+      {/* Search Bar */}
+      {isAuthenticated && (
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={18} color={theme.colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search songs, artists..."
+            placeholderTextColor={theme.colors.textMuted}
+            value={searchQuery}
+            onChangeText={handleSearch}
+            onFocus={() => setActiveTab('search')}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); setActiveTab('playlists'); }}>
+              <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Tabs - hidden when searching */}
+      {activeTab !== 'search' && (
+        <View style={styles.tabs}>
+          <TabButton
+            label="Playlists"
+            active={activeTab === 'playlists'}
+            onPress={() => setActiveTab('playlists')}
+          />
+          <TabButton
+            label="History"
+            active={activeTab === 'history'}
+            onPress={() => setActiveTab('history')}
+          />
+          <TabButton
+            label="Liked"
+            active={activeTab === 'liked'}
+            onPress={() => setActiveTab('liked')}
+          />
+        </View>
+      )}
+
+      {/* Search Results */}
+      {activeTab === 'search' && (
+        searchLoading ? (
+          <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />
+        ) : (
+          <FlatList
+            data={searchResults}
+            renderItem={renderSearchResult}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.list}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              searchQuery.length >= 2 ? (
+                <View style={styles.emptyList}>
+                  <Ionicons name="search-outline" size={48} color={theme.colors.textMuted} />
+                  <Text style={styles.emptyListText}>No results found</Text>
+                  <Text style={styles.emptyListSubtext}>Try a different search term</Text>
+                </View>
+              ) : (
+                <View style={styles.emptyList}>
+                  <Ionicons name="musical-notes-outline" size={48} color={theme.colors.textMuted} />
+                  <Text style={styles.emptyListText}>Search for music</Text>
+                  <Text style={styles.emptyListSubtext}>Find songs and artists</Text>
+                </View>
+              )
+            }
+          />
+        )
+      )}
+
+      {loading && activeTab !== 'search' ? (
         <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />
       ) : activeTab === 'playlists' ? (
         <FlatList
@@ -237,10 +428,11 @@ export default function LibraryScreen() {
           }
           ListEmptyComponent={
             <View style={styles.emptyList}>
+              <Ionicons name="musical-notes-outline" size={48} color={theme.colors.textMuted} />
               <Text style={styles.emptyListText}>No playlists yet</Text>
-              <TouchableOpacity style={styles.createButton}>
-                <Ionicons name="add" size={20} color={theme.colors.primary} />
-                <Text style={styles.createButtonText}>Create Playlist</Text>
+              <TouchableOpacity style={styles.createButton} onPress={() => setShowCreatePlaylist(true)}>
+                <Ionicons name="add-circle" size={20} color={theme.colors.primary} />
+                <Text style={styles.createButtonText}>Create Your First Playlist</Text>
               </TouchableOpacity>
             </View>
           }
@@ -289,6 +481,47 @@ export default function LibraryScreen() {
           }
         />
       )}
+
+      {/* Create Playlist Modal */}
+      <Modal
+        visible={showCreatePlaylist}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCreatePlaylist(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowCreatePlaylist(false)}>
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>New Playlist</Text>
+            <TouchableOpacity onPress={handleCreatePlaylist} disabled={creatingPlaylist}>
+              {creatingPlaylist ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : (
+                <Text style={[styles.modalCreate, !newPlaylistName.trim() && styles.modalCreateDisabled]}>
+                  Create
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalContent}>
+            <View style={styles.playlistIconContainer}>
+              <Ionicons name="musical-notes" size={48} color={theme.colors.textMuted} />
+            </View>
+            <TextInput
+              style={styles.playlistNameInput}
+              placeholder="Playlist name"
+              placeholderTextColor={theme.colors.textMuted}
+              value={newPlaylistName}
+              onChangeText={setNewPlaylistName}
+              autoFocus
+              maxLength={50}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -313,11 +546,41 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
+  },
   title: {
-    fontSize: theme.fontSize.xxl,
+    fontSize: theme.fontSize.xxxl,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.textPrimary,
-    padding: theme.spacing.md,
+  },
+  subtitle: {
+    fontSize: theme.fontSize.md,
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.xs,
+  },
+  addButton: {
+    padding: theme.spacing.xs,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    marginHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing.md,
+    height: 44,
+    gap: theme.spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: theme.fontSize.md,
+    color: theme.colors.textPrimary,
   },
   tabs: {
     flexDirection: 'row',
@@ -527,5 +790,59 @@ const styles = StyleSheet.create({
   },
   heartIcon: {
     marginLeft: theme.spacing.sm,
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  modalTitle: {
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.textPrimary,
+  },
+  modalCancel: {
+    fontSize: theme.fontSize.md,
+    color: theme.colors.textSecondary,
+  },
+  modalCreate: {
+    fontSize: theme.fontSize.md,
+    color: theme.colors.primary,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  modalCreateDisabled: {
+    opacity: 0.5,
+  },
+  modalContent: {
+    padding: theme.spacing.xl,
+    alignItems: 'center',
+  },
+  playlistIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: theme.spacing.xl,
+  },
+  playlistNameInput: {
+    fontSize: theme.fontSize.xl,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    width: '100%',
+    paddingVertical: theme.spacing.md,
+    borderBottomWidth: 2,
+    borderBottomColor: theme.colors.primary,
   },
 });

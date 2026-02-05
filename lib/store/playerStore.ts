@@ -415,15 +415,27 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       return;
     }
 
-    if (hasRecordedPlay || !currentTrack || !playStartTime) {
+    if (hasRecordedPlay) {
+      return; // Already recorded this play
+    }
+
+    if (!currentTrack) {
+      console.log('[checkAndRecordPlay] No current track');
+      return;
+    }
+
+    if (!playStartTime) {
+      console.log('[checkAndRecordPlay] No playStartTime - user may not be authenticated');
       return;
     }
 
     const listenDuration = Date.now() - playStartTime;
 
     if (listenDuration < 30000) {
-      return;
+      return; // Not yet 30 seconds
     }
+
+    console.log(`[checkAndRecordPlay] 30s threshold reached! Recording play for track: ${currentTrack.title}`);
 
     try {
       // Get user_id from auth store

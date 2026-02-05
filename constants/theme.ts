@@ -1,16 +1,16 @@
 export const theme = {
   colors: {
-    // Palladium metal theme
-    primary: '#E8E8E8',
-    secondary: '#B8B8B8',
-    background: '#1A1A1A',
-    surface: '#2A2A2A',
-    surfaceElevated: '#3A3A3A',
-    accent: '#C0C0C0',
-    textPrimary: '#FFFFFF',
-    textSecondary: '#A0A0A0',
-    textMuted: '#707070',
-    border: '#404040',
+    // Palladium metal theme — matches website (blue-tinted steel grays)
+    primary: '#c0c8d6',       // accent-silver (web)
+    secondary: '#6c86a8',     // accent-blue / steel (web)
+    background: '#161922',    // palladium-950
+    surface: '#1b1f2b',       // palladium-900
+    surfaceElevated: '#212637', // palladium-850
+    accent: '#c0c8d6',        // accent-silver
+    textPrimary: '#e8ebf2',   // --text
+    textSecondary: '#aeb6c4', // --text-dim
+    textMuted: '#65708a',     // palladium-500
+    border: '#2a3142',        // --border
     success: '#4ADE80',
     warning: '#FACC15',
     error: '#F87171',

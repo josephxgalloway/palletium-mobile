@@ -15,9 +15,9 @@ export const FEATURE_GATES: FeatureGate[] = [
   // ALWAYS ACTIVE - Core Value
   { key: 'streaming', name: 'Music Streaming', requiredUsers: 0, status: 'active' },
   { key: 'payments', name: 'Artist Payments', requiredUsers: 0, status: 'active' },
-  { key: 'dividends', name: 'Listener Dividends', requiredUsers: 0, status: 'active' },
+  { key: 'dividends', name: 'Listener Rewards', requiredUsers: 0, status: 'active' },
   { key: 'listener_subscription', name: 'Listener Subscriptions', requiredUsers: 0, status: 'active' },
-  { key: 'artist_subscription', name: 'Artist Pro Subscription', requiredUsers: 0, status: 'active' },
+  { key: 'artist_subscription', name: 'Artist Verification', requiredUsers: 0, status: 'active' },
   { key: 'artist_profile', name: 'Artist Social Profile', requiredUsers: 0, status: 'active' },
   { key: 'library', name: 'Library & Playlists', requiredUsers: 0, status: 'active' },
   { key: 'upload', name: 'Track Upload', requiredUsers: 0, status: 'active' },
@@ -25,10 +25,10 @@ export const FEATURE_GATES: FeatureGate[] = [
   { key: 'metadata_editor', name: 'Metadata Editor', requiredUsers: 0, status: 'active' },
 
   // PREVIEW AT 100 USERS - Social Features
-  { key: 'leaderboards', name: 'Leaderboards', requiredUsers: 100, status: 'preview' },
+  { key: 'leaderboards', name: 'Impact', requiredUsers: 100, status: 'preview' },
   { key: 'community_feed', name: 'Community Feed', requiredUsers: 100, status: 'preview' },
-  { key: 'quests', name: 'Quests & Challenges', requiredUsers: 100, status: 'preview' },
-  { key: 'badges', name: 'Badges', requiredUsers: 100, status: 'preview' },
+  { key: 'quests', name: 'Goals', requiredUsers: 100, status: 'preview' },
+  { key: 'badges', name: 'Milestones', requiredUsers: 100, status: 'preview' },
 
   // UNLOCK THRESHOLDS - Paid Features Requiring Network
   {
@@ -55,12 +55,19 @@ export const FEATURE_GATES: FeatureGate[] = [
     key: 'xp_boosters',
     name: 'XP Boosters',
     requiredUsers: 100,
-    additionalConditions: 'Leaderboards active',
+    additionalConditions: 'Impact feature active',
     status: 'preview'
   },
   {
     key: 'marketplace',
     name: 'Artist Marketplace',
+    requiredArtists: 100,
+    requiredUsers: 0,
+    status: 'preview'
+  },
+  {
+    key: 'artist_levels',
+    name: 'Artist Levels',
     requiredArtists: 100,
     requiredUsers: 0,
     status: 'preview'
@@ -81,4 +88,5 @@ export const UNLOCK_THRESHOLDS = {
   seasonPass: 500,            // active users
   xpBoosters: 100,            // users (requires leaderboards)
   marketplace: 100,           // artists
+  artistLevels: 100,          // artists (tied to marketplace/services)
 };

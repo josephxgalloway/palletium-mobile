@@ -89,7 +89,7 @@ export default function SignupPromptModal() {
             {/* Benefits */}
             <View style={styles.benefits}>
               <BenefitRow icon="play-circle" text="Listen to full tracks" />
-              <BenefitRow icon="cash" text="Artists earn $1.00 per first listen" />
+              <BenefitRow icon="cash" text="Verified artists earn $1.00 per first listen" />
               <BenefitRow icon="gift" text="Earn rewards as you listen" />
               <BenefitRow icon="trophy" text="Track your progress and tiers" />
             </View>

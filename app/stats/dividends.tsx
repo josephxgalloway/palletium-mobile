@@ -1,52 +1,142 @@
 import { theme } from '@/constants/theme';
-import { getDividendHistory, getDividendSummary } from '@/lib/api/client';
+import api from '@/lib/api/client';
+import { getUserEntitlements } from '@/lib/entitlements';
+import { useAuthStore } from '@/lib/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+    ActivityIndicator,
+    FlatList,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function DividendsScreen() {
-    const [summary, setSummary] = useState<any>(null);
-    const [history, setHistory] = useState<any[]>([]);
+interface Dividend {
+    id: number;
+    amount: number;
+    dividend_type: 'discovery' | 'listen' | 'referral' | 'bonus' | 'tier_multiplier';
+    source_title?: string;
+    artist_name?: string;
+    multiplier_applied: number;
+    created_at: string;
+}
+
+interface DividendStats {
+    total_earned: number;
+    current_month: number;
+    last_month: number;
+    average_daily: number;
+    total_discoveries: number;
+    current_tier_multiplier: number;
+    next_payout_date: string;
+    pending_amount: number;
+}
+
+const dividendTypeLabels: Record<string, string> = {
+    discovery: 'New Discovery',
+    listen: 'Track Listen',
+    referral: 'Referral Bonus',
+    bonus: 'Special Bonus',
+    tier_multiplier: 'Tier Multiplier'
+};
+
+const dividendTypeColors: Record<string, string> = {
+    discovery: theme.colors.accent,
+    listen: theme.colors.success,
+    referral: '#A855F7',
+    bonus: theme.colors.warning,
+    tier_multiplier: theme.colors.primary
+};
+
+const TIER_MULTIPLIERS = [
+    { name: 'Bronze', multiplier: '1×', color: '#CD7F32' },
+    { name: 'Silver', multiplier: '1.25×', color: '#C0C0C0' },
+    { name: 'Gold', multiplier: '1.5×', color: '#FFD700' },
+    { name: 'Platinum', multiplier: '1.75×', color: '#E5E4E2' },
+    { name: 'Diamond', multiplier: '2×', color: '#B9F2FF' },
+];
+
+export default function RewardsScreen() {
+    const { user } = useAuthStore();
+    const { hasActiveListenerSubscription } = getUserEntitlements(user);
+    const [stats, setStats] = useState<DividendStats | null>(null);
+    const [dividends, setDividends] = useState<Dividend[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(true);
+    const [selectedFilter, setSelectedFilter] = useState<string>('all');
+    const [isComingSoon, setIsComingSoon] = useState(false);
 
     const fetchData = useCallback(async () => {
-        try {
-            const [summaryData, historyData] = await Promise.all([
-                getDividendSummary(),
-                getDividendHistory(1)
-            ]);
-            setSummary(summaryData.data);
-            setHistory(historyData.data.items);
-            setHasMore(historyData.data.pagination.hasNext);
-            setPage(1);
-        } catch (error) {
-            console.error('Failed to fetch dividends:', error);
-        }
-    }, []);
+        if (!user?.id) return;
 
-    const loadMore = async () => {
-        if (!hasMore || loading) return;
         try {
-            const nextPage = page + 1;
-            const data = await getDividendHistory(nextPage);
-            setHistory(prev => [...prev, ...data.data.items]);
-            setHasMore(data.data.pagination.hasNext);
-            setPage(nextPage);
-        } catch (error) {
-            console.error('Failed to load more dividends:', error);
-        }
-    };
+            // Try to fetch real dividend data
+            const response = await api.get(`/dividends/user/${user.id}`);
+            const data = response.data?.data || response.data;
 
-    const onRefresh = async () => {
-        setRefreshing(true);
-        await fetchData();
-        setRefreshing(false);
-    };
+            const history: Dividend[] = (data?.history || []).map((d: any, idx: number) => ({
+                id: d.id || idx + 1,
+                amount: Number(d.amount ?? 0),
+                dividend_type: d.dividend_type || d.type || 'discovery',
+                source_title: d.source_title || d.track_title,
+                artist_name: d.artist_name,
+                multiplier_applied: Number(d.multiplier_applied ?? d.tier_multiplier ?? 1.0),
+                created_at: d.created_at || d.timestamp || new Date().toISOString(),
+            }));
+
+            // Calculate stats
+            const now = new Date();
+            const thisMonthKey = now.toISOString().slice(0, 7);
+            const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastMonthKey = lastMonthDate.toISOString().slice(0, 7);
+
+            const sumByMonth = (key: string) =>
+                history.filter(d => d.created_at?.slice(0, 7) === key)
+                    .reduce((sum, d) => sum + d.amount, 0);
+
+            const current_month = sumByMonth(thisMonthKey);
+            const last_month = sumByMonth(lastMonthKey);
+
+            const last30Total = history
+                .filter(d => Date.now() - new Date(d.created_at).getTime() <= 30 * 24 * 60 * 60 * 1000)
+                .reduce((sum, d) => sum + d.amount, 0);
+
+            setStats({
+                total_earned: data?.totalEarned || history.reduce((sum, d) => sum + d.amount, 0),
+                current_month,
+                last_month,
+                average_daily: last30Total / 30,
+                total_discoveries: history.filter(d => d.dividend_type === 'discovery').length,
+                current_tier_multiplier: data?.tierMultiplier || 1.0,
+                next_payout_date: data?.nextPayoutDate || '',
+                pending_amount: data?.pendingAmount || 0,
+            });
+
+            setDividends(history);
+            setIsComingSoon(false);
+        } catch (err: any) {
+            // Show coming soon state for missing endpoints
+            setIsComingSoon(true);
+            setStats({
+                total_earned: 0,
+                current_month: 0,
+                last_month: 0,
+                average_daily: 0,
+                total_discoveries: 0,
+                current_tier_multiplier: 1.0,
+                next_payout_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                pending_amount: 0,
+            });
+            setDividends([]);
+        }
+    }, [user?.id]);
 
     useEffect(() => {
         const init = async () => {
@@ -57,104 +147,361 @@ export default function DividendsScreen() {
         init();
     }, [fetchData]);
 
-    if (loading && !refreshing && !summary) {
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchData();
+        setRefreshing(false);
+    };
+
+    const filteredDividends = dividends.filter(d => {
+        if (selectedFilter === 'all') return true;
+        return d.dividend_type === selectedFilter;
+    });
+
+    const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
+    const formatSmallCurrency = (amount: number) => `$${amount.toFixed(4)}`;
+
+    if (loading && !refreshing) {
         return (
-            <View style={styles.center}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-            </View>
+            <SafeAreaView style={styles.container}>
+                <Stack.Screen options={{ headerShown: false }} />
+                <View style={styles.center}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                </View>
+            </SafeAreaView>
         );
     }
 
-    const renderHeader = () => (
-        <View style={styles.header}>
-            {summary && (
-                <View style={styles.cardsContainer}>
-                    <View style={[styles.card, { backgroundColor: theme.colors.surfaceElevated }]}>
-                        <Text style={styles.cardLabel}>Lifetime Earnings</Text>
-                        <Text style={[styles.cardValue, { color: theme.colors.success }]}>
-                            ${(summary.lifetime.grossCents / 100).toFixed(2)}
+    // Hard paywall — unsubscribed users see only the gate, no history
+    if (!hasActiveListenerSubscription) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <Stack.Screen options={{ headerShown: false }} />
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Your Rewards</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.spacing.md }}>
+                    <View style={styles.paywallPanel}>
+                        <View style={styles.paywallIconContainer}>
+                            <Ionicons name="lock-closed" size={32} color={theme.colors.primary} />
+                        </View>
+                        <Text style={styles.paywallTitle}>Subscribe to Earn Rewards</Text>
+                        <Text style={styles.paywallText}>
+                            Listener rewards accrue from first listens on verified artists. Subscribe to start earning.
                         </Text>
-                        <Ionicons name="trending-up" size={20} color={theme.colors.success} style={styles.cardIcon} />
-                    </View>
-
-                    <View style={[styles.card, { backgroundColor: theme.colors.surfaceElevated }]}>
-                        <Text style={styles.cardLabel}>Pending Payout</Text>
-                        <Text style={[styles.cardValue, { color: theme.colors.warning }]}>
-                            ${(summary.byStatus.pending.totalCents / 100).toFixed(2)}
-                        </Text>
-                        <Ionicons name="hourglass-outline" size={20} color={theme.colors.warning} style={styles.cardIcon} />
+                        <TouchableOpacity
+                            style={styles.paywallButton}
+                            onPress={() => router.push('/settings/subscription' as any)}
+                        >
+                            <Text style={styles.paywallButtonText}>View Plans</Text>
+                            <Ionicons name="chevron-forward" size={16} color={theme.colors.background} />
+                        </TouchableOpacity>
                     </View>
                 </View>
-            )}
-            <Text style={styles.sectionTitle}>Transaction History</Text>
-        </View>
-    );
+            </SafeAreaView>
+        );
+    }
 
-    const renderItem = ({ item }: { item: any }) => (
-        <View style={styles.transactionItem}>
-            <View style={styles.transactionLeft}>
-                <View style={[styles.iconContainer, {
-                    backgroundColor: item.status === 'completed' ? theme.colors.success + '20' : theme.colors.warning + '20'
-                }]}>
-                    <Ionicons
-                        name={item.status === 'completed' ? "checkmark-circle" : "time"}
-                        size={20}
-                        color={item.status === 'completed' ? theme.colors.success : theme.colors.warning}
-                    />
-                </View>
-                <View>
-                    <Text style={styles.transactionDate}>
-                        {new Date(item.periodStart).toLocaleDateString()}
-                    </Text>
-                    <Text style={styles.transactionSubtext}>
-                        {item.discoveries} discoveries
-                    </Text>
-                </View>
-            </View>
-            <View style={styles.transactionRight}>
-                <Text style={styles.transactionAmount}>
-                    ${(item.cents / 100).toFixed(2)}
-                </Text>
-                <Text style={[styles.transactionStatus, {
-                    color: item.status === 'completed' ? theme.colors.success : theme.colors.warning
-                }]}>
-                    {item.status}
-                </Text>
-            </View>
-        </View>
-    );
+    const monthlyGrowth = stats && stats.last_month > 0
+        ? ((stats.current_month - stats.last_month) / stats.last_month) * 100
+        : 0;
 
     return (
         <SafeAreaView style={styles.container}>
-            <Stack.Screen options={{
-                headerTitle: 'Earnings & Dividends',
-                headerStyle: { backgroundColor: theme.colors.background },
-                headerTintColor: theme.colors.textPrimary,
-                headerLeft: () => (
-                    <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
-                        <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
-                    </TouchableOpacity>
-                ),
-            }} />
+            <Stack.Screen options={{ headerShown: false }} />
 
-            <FlatList
-                data={history}
-                renderItem={renderItem}
-                keyExtractor={item => item.id.toString()}
-                contentContainerStyle={styles.listContent}
-                ListHeaderComponent={renderHeader}
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Your Rewards</Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView
+                contentContainerStyle={styles.content}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
                 }
-                onEndReached={loadMore}
-                onEndReachedThreshold={0.5}
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>No transactions found</Text>
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Coming Soon Banner */}
+                {isComingSoon && (
+                    <View style={styles.comingSoonBanner}>
+                        <Ionicons name="sparkles" size={20} color={theme.colors.primary} />
+                        <Text style={styles.comingSoonText}>
+                            Rewards tracking is coming soon! Keep listening to earn rewards.
+                        </Text>
                     </View>
-                }
-            />
+                )}
+
+                {/* Stats Overview */}
+                <View style={styles.statsGrid}>
+                    <StatCard
+                        icon="cash"
+                        label="Total Earned"
+                        value={formatCurrency(stats?.total_earned || 0)}
+                        color={theme.colors.success}
+                    />
+                    <StatCard
+                        icon="trending-up"
+                        label="This Month"
+                        value={formatCurrency(stats?.current_month || 0)}
+                        trend={monthlyGrowth}
+                        color={theme.colors.accent}
+                    />
+                    <StatCard
+                        icon="calendar"
+                        label="Daily Average"
+                        value={formatCurrency(stats?.average_daily || 0)}
+                        color={theme.colors.primary}
+                    />
+                    <StatCard
+                        icon="compass"
+                        label="Discoveries"
+                        value={(stats?.total_discoveries || 0).toString()}
+                        color={theme.colors.accent}
+                    />
+                </View>
+
+                {/* Tier Multiplier & Next Payout */}
+                <View style={styles.cardsRow}>
+                    <View style={styles.infoCard}>
+                        <View style={styles.infoCardHeader}>
+                            <Text style={styles.infoCardTitle}>Tier Multiplier</Text>
+                            <Ionicons name="flash" size={20} color={theme.colors.primary} />
+                        </View>
+                        <Text style={styles.multiplierValue}>
+                            {stats?.current_tier_multiplier || 1.0}×
+                        </Text>
+                        <Text style={styles.infoCardSubtext}>on all rewards</Text>
+                    </View>
+
+                    <View style={styles.infoCard}>
+                        <View style={styles.infoCardHeader}>
+                            <Text style={styles.infoCardTitle}>Next Payout</Text>
+                            <Ionicons name="wallet" size={20} color={theme.colors.success} />
+                        </View>
+                        <Text style={[styles.multiplierValue, { color: theme.colors.success }]}>
+                            {formatCurrency(stats?.pending_amount || 0)}
+                        </Text>
+                        <Text style={styles.infoCardSubtext}>pending</Text>
+                    </View>
+                </View>
+
+                {/* Filter Tabs */}
+                <View style={styles.filterContainer}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        {['all', 'discovery', 'listen', 'referral', 'bonus'].map((filter) => (
+                            <TouchableOpacity
+                                key={filter}
+                                style={[
+                                    styles.filterTab,
+                                    selectedFilter === filter && styles.filterTabActive
+                                ]}
+                                onPress={() => setSelectedFilter(filter)}
+                            >
+                                <Text style={[
+                                    styles.filterTabText,
+                                    selectedFilter === filter && styles.filterTabTextActive
+                                ]}>
+                                    {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                {/* Recent Activity / History */}
+                <View style={styles.historySection}>
+                    <Text style={styles.sectionTitle}>Rewards History</Text>
+                    <Text style={styles.sectionSubtitle}>
+                        {filteredDividends.length} transaction{filteredDividends.length !== 1 ? 's' : ''}
+                    </Text>
+
+                    {filteredDividends.length > 0 ? (
+                        filteredDividends.map((dividend) => (
+                            <View key={dividend.id} style={styles.historyItem}>
+                                <View style={[
+                                    styles.historyIconContainer,
+                                    { backgroundColor: (dividendTypeColors[dividend.dividend_type] || theme.colors.primary) + '20' }
+                                ]}>
+                                    <Ionicons
+                                        name={dividend.dividend_type === 'discovery' ? 'compass' :
+                                            dividend.dividend_type === 'listen' ? 'play' :
+                                                dividend.dividend_type === 'referral' ? 'people' :
+                                                    dividend.dividend_type === 'bonus' ? 'gift' : 'flash'}
+                                        size={18}
+                                        color={dividendTypeColors[dividend.dividend_type] || theme.colors.primary}
+                                    />
+                                </View>
+                                <View style={styles.historyInfo}>
+                                    <Text style={styles.historyTitle}>
+                                        {dividend.source_title || dividendTypeLabels[dividend.dividend_type] || 'Reward'}
+                                    </Text>
+                                    <Text style={styles.historyMeta}>
+                                        {dividend.artist_name && `${dividend.artist_name} • `}
+                                        {new Date(dividend.created_at).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        })}
+                                    </Text>
+                                </View>
+                                <View style={styles.historyRight}>
+                                    <Text style={styles.historyAmount}>
+                                        +{formatSmallCurrency(dividend.amount)}
+                                    </Text>
+                                    {dividend.multiplier_applied > 1 && (
+                                        <Text style={styles.historyMultiplier}>
+                                            {dividend.multiplier_applied}× bonus
+                                        </Text>
+                                    )}
+                                </View>
+                            </View>
+                        ))
+                    ) : (
+                        <View style={styles.emptyState}>
+                            <Ionicons name="gift-outline" size={48} color={theme.colors.textMuted} />
+                            <Text style={styles.emptyTitle}>No Rewards Yet</Text>
+                            <Text style={styles.emptySubtext}>
+                                Start discovering music to earn your first rewards!
+                            </Text>
+                        </View>
+                    )}
+                </View>
+
+                {/* How It Works */}
+                <View style={styles.howItWorksSection}>
+                    <Text style={styles.sectionTitle}>How Rewards Work</Text>
+
+                    <View style={styles.howItWorksGrid}>
+                        <HowItWorksCard
+                            icon="compass"
+                            iconColor={theme.colors.accent}
+                            title="Discovery Rewards"
+                            description="Earn rewards when you discover new music. First listens count!"
+                        />
+                        <HowItWorksCard
+                            icon="trending-up"
+                            iconColor={theme.colors.success}
+                            title="Tier Multipliers"
+                            description="Higher tiers earn more. Bronze 1×, Silver 1.25×, Gold 1.5×, Platinum 1.75×, Diamond 2×"
+                        />
+                        <HowItWorksCard
+                            icon="people"
+                            iconColor="#A855F7"
+                            title="Referral Bonuses"
+                            description="Invite friends to earn referral rewards when they join and start listening."
+                        />
+                        <HowItWorksCard
+                            icon="flash"
+                            iconColor={theme.colors.warning}
+                            title="Special Bonuses"
+                            description="Complete challenges and milestones for special bonus rewards."
+                        />
+                    </View>
+
+                    {/* Tier Multiplier Breakdown */}
+                    <View style={styles.tierBreakdown}>
+                        <Text style={styles.tierBreakdownTitle}>Tier Multipliers</Text>
+                        <View style={styles.tierList}>
+                            {TIER_MULTIPLIERS.map((tier) => (
+                                <View key={tier.name} style={styles.tierItem}>
+                                    <View style={[styles.tierDot, { backgroundColor: tier.color }]} />
+                                    <Text style={styles.tierName}>{tier.name}</Text>
+                                    <Text style={[styles.tierMultiplier, { color: tier.color }]}>
+                                        {tier.multiplier}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    </View>
+
+                    {/* Your Earnings Calculation */}
+                    {stats && (
+                        <View style={styles.earningsCalc}>
+                            <Text style={styles.earningsCalcTitle}>Your Earnings Rate</Text>
+                            <View style={styles.earningsCalcRow}>
+                                <Text style={styles.earningsCalcLabel}>Base rate per discovery:</Text>
+                                <Text style={styles.earningsCalcValue}>$0.005</Text>
+                            </View>
+                            <View style={styles.earningsCalcRow}>
+                                <Text style={styles.earningsCalcLabel}>Your tier multiplier:</Text>
+                                <Text style={[styles.earningsCalcValue, { color: theme.colors.primary }]}>
+                                    {stats.current_tier_multiplier}×
+                                </Text>
+                            </View>
+                            <View style={styles.earningsCalcDivider} />
+                            <View style={styles.earningsCalcRow}>
+                                <Text style={styles.earningsCalcLabel}>Your rate per discovery:</Text>
+                                <Text style={[styles.earningsCalcValue, { color: theme.colors.success, fontSize: theme.fontSize.lg }]}>
+                                    ${(0.005 * stats.current_tier_multiplier).toFixed(4)}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+                </View>
+
+                <View style={{ height: 40 }} />
+            </ScrollView>
         </SafeAreaView>
+    );
+}
+
+// Helper Components
+function StatCard({ icon, label, value, trend, color }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    value: string;
+    trend?: number;
+    color: string;
+}) {
+    return (
+        <View style={styles.statCard}>
+            <Ionicons name={icon} size={20} color={color} />
+            <Text style={styles.statValue}>{value}</Text>
+            <Text style={styles.statLabel}>{label}</Text>
+            {trend !== undefined && trend !== 0 && (
+                <View style={[
+                    styles.trendBadge,
+                    { backgroundColor: trend > 0 ? theme.colors.success + '20' : theme.colors.error + '20' }
+                ]}>
+                    <Ionicons
+                        name={trend > 0 ? 'arrow-up' : 'arrow-down'}
+                        size={10}
+                        color={trend > 0 ? theme.colors.success : theme.colors.error}
+                    />
+                    <Text style={[
+                        styles.trendText,
+                        { color: trend > 0 ? theme.colors.success : theme.colors.error }
+                    ]}>
+                        {Math.abs(trend).toFixed(0)}%
+                    </Text>
+                </View>
+            )}
+        </View>
+    );
+}
+
+function HowItWorksCard({ icon, iconColor, title, description }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    iconColor: string;
+    title: string;
+    description: string;
+}) {
+    return (
+        <View style={styles.howItWorksCard}>
+            <Ionicons name={icon} size={20} color={iconColor} />
+            <Text style={styles.howItWorksTitle}>{title}</Text>
+            <Text style={styles.howItWorksDesc}>{description}</Text>
+        </View>
     );
 }
 
@@ -167,95 +514,337 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: theme.colors.background,
-    },
-    listContent: {
-        padding: theme.spacing.md,
-        paddingBottom: 40,
     },
     header: {
-        marginBottom: theme.spacing.lg,
-    },
-    cardsContainer: {
-        flexDirection: 'row',
-        gap: theme.spacing.md,
-        marginBottom: theme.spacing.xl,
-    },
-    card: {
-        flex: 1,
-        padding: theme.spacing.md,
-        borderRadius: theme.borderRadius.md,
-        position: 'relative',
-        height: 100,
-        justifyContent: 'center',
-    },
-    cardLabel: {
-        fontSize: theme.fontSize.xs,
-        color: theme.colors.textSecondary,
-        marginBottom: 4,
-    },
-    cardValue: {
-        fontSize: theme.fontSize.xl,
-        fontWeight: 'bold',
-    },
-    cardIcon: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        opacity: 0.8,
-    },
-    sectionTitle: {
-        fontSize: theme.fontSize.lg,
-        fontWeight: theme.fontWeight.bold,
-        color: theme.colors.textPrimary,
-        marginBottom: theme.spacing.sm,
-    },
-    transactionItem: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: theme.spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.colors.surface,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
     },
-    transactionLeft: {
+    backButton: {
+        padding: 8,
+    },
+    headerTitle: {
+        fontSize: theme.fontSize.lg,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+    },
+    content: {
+        padding: theme.spacing.md,
+    },
+    comingSoonBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: theme.spacing.md,
+        backgroundColor: theme.colors.surface,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        marginBottom: theme.spacing.lg,
+        gap: theme.spacing.sm,
     },
-    iconContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+    comingSoonText: {
+        flex: 1,
+        color: theme.colors.textSecondary,
+        fontSize: theme.fontSize.sm,
+    },
+    statsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: theme.spacing.sm,
+        marginBottom: theme.spacing.lg,
+    },
+    statCard: {
+        width: '48%',
+        backgroundColor: theme.colors.surface,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        alignItems: 'center',
+    },
+    statValue: {
+        fontSize: theme.fontSize.xl,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+        marginTop: theme.spacing.xs,
+    },
+    statLabel: {
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textMuted,
+        marginTop: 2,
+    },
+    trendBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 10,
+        marginTop: theme.spacing.xs,
+        gap: 2,
+    },
+    trendText: {
+        fontSize: 10,
+        fontWeight: '600',
+    },
+    cardsRow: {
+        flexDirection: 'row',
+        gap: theme.spacing.md,
+        marginBottom: theme.spacing.lg,
+    },
+    infoCard: {
+        flex: 1,
+        backgroundColor: theme.colors.surface,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+    },
+    infoCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: theme.spacing.sm,
+    },
+    infoCardTitle: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+        fontWeight: '600',
+    },
+    multiplierValue: {
+        fontSize: theme.fontSize.xxl,
+        fontWeight: 'bold',
+        color: theme.colors.primary,
+    },
+    infoCardSubtext: {
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textMuted,
+    },
+    filterContainer: {
+        marginBottom: theme.spacing.lg,
+    },
+    filterTab: {
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: theme.borderRadius.full,
+        backgroundColor: theme.colors.surface,
+        marginRight: theme.spacing.sm,
+    },
+    filterTabActive: {
+        backgroundColor: theme.colors.primary,
+    },
+    filterTabText: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+        fontWeight: '600',
+    },
+    filterTabTextActive: {
+        color: theme.colors.background,
+    },
+    historySection: {
+        marginBottom: theme.spacing.xl,
+    },
+    sectionTitle: {
+        fontSize: theme.fontSize.lg,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+        marginBottom: theme.spacing.xs,
+    },
+    sectionSubtitle: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textMuted,
+        marginBottom: theme.spacing.md,
+    },
+    historyItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.colors.surface,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        marginBottom: theme.spacing.sm,
+    },
+    historyIconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
+        marginRight: theme.spacing.md,
     },
-    transactionDate: {
-        color: theme.colors.textPrimary,
+    historyInfo: {
+        flex: 1,
+    },
+    historyTitle: {
         fontSize: theme.fontSize.md,
+        color: theme.colors.textPrimary,
         fontWeight: '500',
     },
-    transactionSubtext: {
-        color: theme.colors.textMuted,
+    historyMeta: {
         fontSize: theme.fontSize.xs,
+        color: theme.colors.textMuted,
+        marginTop: 2,
     },
-    transactionRight: {
+    historyRight: {
         alignItems: 'flex-end',
     },
-    transactionAmount: {
-        color: theme.colors.textPrimary,
+    historyAmount: {
         fontSize: theme.fontSize.md,
         fontWeight: 'bold',
+        color: theme.colors.success,
     },
-    transactionStatus: {
+    historyMultiplier: {
         fontSize: theme.fontSize.xs,
-        textTransform: 'capitalize',
+        color: theme.colors.warning,
     },
-    emptyContainer: {
-        padding: theme.spacing.xl,
+    emptyState: {
+        alignItems: 'center',
+        paddingVertical: theme.spacing.xxl,
+    },
+    emptyTitle: {
+        fontSize: theme.fontSize.lg,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+        marginTop: theme.spacing.md,
+    },
+    emptySubtext: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textMuted,
+        marginTop: theme.spacing.xs,
+        textAlign: 'center',
+    },
+    howItWorksSection: {
+        marginBottom: theme.spacing.xl,
+    },
+    howItWorksGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: theme.spacing.sm,
+        marginTop: theme.spacing.md,
+    },
+    howItWorksCard: {
+        width: '48%',
+        backgroundColor: theme.colors.surface,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+    },
+    howItWorksTitle: {
+        fontSize: theme.fontSize.sm,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+        marginTop: theme.spacing.sm,
+        marginBottom: theme.spacing.xs,
+    },
+    howItWorksDesc: {
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textSecondary,
+        lineHeight: 16,
+    },
+    tierBreakdown: {
+        backgroundColor: theme.colors.surface,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        marginTop: theme.spacing.lg,
+    },
+    tierBreakdownTitle: {
+        fontSize: theme.fontSize.md,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+        marginBottom: theme.spacing.md,
+    },
+    tierList: {
+        gap: theme.spacing.sm,
+    },
+    tierItem: {
+        flexDirection: 'row',
         alignItems: 'center',
     },
-    emptyText: {
-        color: theme.colors.textMuted,
+    tierDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        marginRight: theme.spacing.sm,
+    },
+    tierName: {
+        flex: 1,
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+    },
+    tierMultiplier: {
+        fontSize: theme.fontSize.sm,
+        fontWeight: 'bold',
+    },
+    earningsCalc: {
+        backgroundColor: theme.colors.surfaceElevated,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        marginTop: theme.spacing.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+    },
+    earningsCalcTitle: {
+        fontSize: theme.fontSize.md,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+        marginBottom: theme.spacing.md,
+    },
+    earningsCalcRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: theme.spacing.xs,
+    },
+    earningsCalcLabel: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+    },
+    earningsCalcValue: {
+        fontSize: theme.fontSize.sm,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+    },
+    earningsCalcDivider: {
+        height: 1,
+        backgroundColor: theme.colors.border,
+        marginVertical: theme.spacing.sm,
+    },
+    // Paywall
+    paywallPanel: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.lg,
+        padding: theme.spacing.xl,
+        alignItems: 'center' as const,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+    },
+    paywallIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: 'rgba(184, 134, 11, 0.1)',
+        justifyContent: 'center' as const,
+        alignItems: 'center' as const,
+        marginBottom: theme.spacing.md,
+    },
+    paywallTitle: {
+        fontSize: theme.fontSize.lg,
+        fontWeight: 'bold' as const,
+        color: theme.colors.textPrimary,
+        marginBottom: theme.spacing.sm,
+    },
+    paywallText: {
+        fontSize: theme.fontSize.md,
+        color: theme.colors.textSecondary,
+        textAlign: 'center' as const,
+        lineHeight: 22,
+        marginBottom: theme.spacing.lg,
+    },
+    paywallButton: {
+        flexDirection: 'row' as const,
+        alignItems: 'center' as const,
+        backgroundColor: theme.colors.primary,
+        paddingVertical: theme.spacing.sm,
+        paddingHorizontal: theme.spacing.lg,
+        borderRadius: theme.borderRadius.full,
+        gap: theme.spacing.xs,
+    },
+    paywallButtonText: {
+        color: theme.colors.background,
+        fontSize: theme.fontSize.md,
+        fontWeight: '600' as const,
     },
 });

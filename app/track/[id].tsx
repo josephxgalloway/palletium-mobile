@@ -370,7 +370,7 @@ export default function TrackDetailScreen() {
                             {isFirstListen ? (
                                 <>
                                     <Text style={styles.paymentTitle}>First Listen Bonus</Text>
-                                    <Text style={styles.paymentAmount}>Artist earns $1.00</Text>
+                                    <Text style={styles.paymentAmount}>Verified artist earns $1.00</Text>
                                 </>
                             ) : (
                                 <>

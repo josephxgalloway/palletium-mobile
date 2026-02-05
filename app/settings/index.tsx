@@ -1,4 +1,5 @@
 import { theme } from '@/constants/theme';
+import { getUserEntitlements } from '@/lib/entitlements';
 import { useAuthStore } from '@/lib/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router } from 'expo-router';
@@ -9,6 +10,8 @@ import Toast from 'react-native-toast-message';
 
 export default function SettingsScreen() {
     const { logout, user } = useAuthStore();
+    const { isVerifiedArtist } = getUserEntitlements(user);
+    const isArtistType = user?.type === 'artist';
 
     // Local state for toggles (mocked for now)
     const [highQualityAudio, setHighQualityAudio] = useState(true);
@@ -142,6 +145,14 @@ export default function SettingsScreen() {
                         value="Free"
                         onPress={() => router.push('/settings/subscription' as any)}
                     />
+                    {isArtistType && (
+                        <SettingRow
+                            icon="shield-checkmark-outline"
+                            label="Artist Verification"
+                            value={isVerifiedArtist ? 'Verified' : 'Not verified'}
+                            onPress={() => router.push('/settings/verification' as any)}
+                        />
+                    )}
                 </SettingSection>
 
                 {/* Audio Quality */}

@@ -12,13 +12,23 @@ export default function TasteEvolutionScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [months, setMonths] = useState(6);
+    const [error, setError] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         try {
+            setError(null);
             const response = await getTasteEvolution(months);
-            setEvolution(response.data);
-        } catch (error) {
-            console.error('Failed to fetch taste evolution:', error);
+            const data = response?.data || response;
+            setEvolution(data);
+        } catch (err: any) {
+            // Silently handle - this endpoint may not be implemented yet
+            const status = err.response?.status;
+            if (status === 404 || status === 500) {
+                setError('Taste Evolution is coming soon! Keep listening to build your music profile.');
+            } else {
+                setError('Unable to load taste data. Please try again later.');
+            }
+            setEvolution(null);
         }
     }, [months]);
 
@@ -85,6 +95,13 @@ export default function TasteEvolutionScreen() {
                         </TouchableOpacity>
                     ))}
                 </View>
+
+                {error && (
+                    <View style={styles.errorBanner}>
+                        <Ionicons name="information-circle" size={20} color={theme.colors.primary} />
+                        <Text style={styles.errorText}>{error}</Text>
+                    </View>
+                )}
 
                 {evolution && (
                     <>
@@ -331,5 +348,19 @@ const styles = StyleSheet.create({
         color: theme.colors.textMuted,
         fontSize: theme.fontSize.xs,
         textAlign: 'right',
+    },
+    errorBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.colors.surface,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        marginBottom: theme.spacing.lg,
+        gap: theme.spacing.sm,
+    },
+    errorText: {
+        flex: 1,
+        color: theme.colors.textSecondary,
+        fontSize: theme.fontSize.sm,
     },
 });

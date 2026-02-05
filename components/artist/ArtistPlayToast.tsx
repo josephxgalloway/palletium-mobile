@@ -16,7 +16,7 @@ interface NotificationWithId extends ArtistPlayNotification {
 export function ArtistPlayToast() {
   const { user } = useAuthStore();
   const [notifications, setNotifications] = useState<NotificationWithId[]>([]);
-  const timeoutRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const timeoutRefs = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const dismissNotification = useCallback((id: string) => {
     setNotifications((prev) => {

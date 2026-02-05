@@ -10,7 +10,7 @@ Fair Pay Music Streaming
 Palletium is the music streaming platform that pays artists what they deserve.
 
 **For Artists:**
-- Earn $1.00 for every first listen (200x more than Spotify)
+- Verified artists earn $1.00 per first listen (200x more than Spotify)
 - Earn $0.01 for every repeat listen
 - Track your earnings in real-time
 - Connect directly with your fans

@@ -14,7 +14,7 @@ const fs = require('fs');
 // Splash screen dimensions (iPhone 14 Pro Max)
 const WIDTH = 1284;
 const HEIGHT = 2778;
-const BACKGROUND_COLOR = { r: 26, g: 26, b: 26, alpha: 1 }; // #1A1A1A
+const BACKGROUND_COLOR = { r: 22, g: 25, b: 34, alpha: 1 }; // #161922
 
 // Logo will be 60% of screen width
 const LOGO_WIDTH_PERCENT = 0.6;
@@ -34,7 +34,7 @@ async function generateSplash() {
 
   console.log('Generating splash screen...');
   console.log(`  Dimensions: ${WIDTH}x${HEIGHT}`);
-  console.log(`  Background: #1A1A1A`);
+  console.log(`  Background: #161922`);
   console.log(`  Logo width: ${logoWidth}px`);
 
   try {

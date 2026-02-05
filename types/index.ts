@@ -2,14 +2,19 @@ export interface User {
   id: number;
   email: string;
   name: string;
-  type: 'artist' | 'listener';
+  type: 'artist' | 'listener' | 'admin';
   tier_id: number;
   level: number;
   total_xp: number;
   subscription_status: string | null;
   subscription_tier: string | null;
+  stripe_subscription_status?: string | null;
   profile_image: string | null;
+  profile_image_url?: string | null;
   created_at: string;
+  is_admin?: boolean;
+  /** Artist identity verification via Stripe Identity (backend field: isVerified) */
+  isVerified?: boolean;
 }
 
 export interface Track {
@@ -72,12 +77,16 @@ export interface DashboardStats {
   tier_progress?: number;
   total_xp?: number;
 
-  // Artist stats
-  total_earnings?: number;
-  pending_earnings?: number;
+  // Artist stats (API may use different field names)
+  total_earnings?: number;    // normalized from total_revenue
+  pending_earnings?: number;  // normalized from pending_revenue
+  total_revenue?: number;     // original API field
+  pending_revenue?: number;   // original API field
+  monthly_revenue?: number;
   total_plays?: number;
   unique_listeners?: number;
-  track_count?: number;
+  track_count?: number;       // normalized from total_tracks
+  total_tracks?: number;      // original API field
   current_level?: number;
   level_progress?: number;
 }

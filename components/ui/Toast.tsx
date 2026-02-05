@@ -2,6 +2,26 @@ import Toast, { BaseToast, ErrorToast, ToastConfig } from 'react-native-toast-me
 import { theme } from '@/constants/theme';
 
 export const toastConfig: ToastConfig = {
+  info: (props) => (
+    <BaseToast
+      {...props}
+      style={{
+        borderLeftColor: theme.colors.primary,
+        backgroundColor: theme.colors.surfaceElevated,
+        borderLeftWidth: 4,
+      }}
+      contentContainerStyle={{ paddingHorizontal: 15 }}
+      text1Style={{
+        fontSize: 15,
+        fontWeight: '600',
+        color: theme.colors.textPrimary,
+      }}
+      text2Style={{
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+      }}
+    />
+  ),
   success: (props) => (
     <BaseToast
       {...props}

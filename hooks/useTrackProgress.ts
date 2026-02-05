@@ -38,6 +38,7 @@ function useMockActiveTrack() {
 export function useTrackProgress() {
   const { setPosition, setDuration, setIsPlaying, checkAndRecordPlay, checkPreviewEnd, isPlaying, position, duration, currentTrack, isPreviewMode } = usePlayerStore();
   const checkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mockPositionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Use native hooks if available, otherwise use mock
   const progress = isNativeAvailable && useProgress ? useProgress(1000) : useMockProgress();
@@ -60,20 +61,55 @@ export function useTrackProgress() {
     }
   }, [playbackState.state, setIsPlaying]);
 
+  // Mock player position simulation (Expo Go only)
+  useEffect(() => {
+    if (isNativeAvailable) return; // Skip for native player
+
+    if (isPlaying && currentTrack) {
+      // Simulate position incrementing every second
+      mockPositionIntervalRef.current = setInterval(() => {
+        const currentPos = usePlayerStore.getState().position;
+        const currentDur = usePlayerStore.getState().duration;
+        if (currentPos < currentDur) {
+          setPosition(currentPos + 1);
+        }
+      }, 1000);
+    } else {
+      if (mockPositionIntervalRef.current) {
+        clearInterval(mockPositionIntervalRef.current);
+        mockPositionIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (mockPositionIntervalRef.current) {
+        clearInterval(mockPositionIntervalRef.current);
+      }
+    };
+  }, [isPlaying, currentTrack, isNativeAvailable, setPosition]);
+
   // Set up interval to check for 30s threshold and preview end while playing
   useEffect(() => {
     const isCurrentlyPlaying = isNativeAvailable && State
       ? playbackState.state === State.Playing
       : isPlaying;
 
-    if (isCurrentlyPlaying) {
-      // Check every second while playing (needed for preview timing)
+    if (isCurrentlyPlaying && currentTrack) {
+      console.log(`[useTrackProgress] Starting check interval for "${currentTrack.title}" (preview: ${isPreviewMode})`);
+
+      // Check every second while playing (needed for preview timing and 30s payment)
       checkIntervalRef.current = setInterval(() => {
         // Check preview end (for unauthenticated users)
         if (isPreviewMode) {
           checkPreviewEnd();
         } else {
           // Check for play recording (for authenticated users)
+          // Log for debugging
+          const state = usePlayerStore.getState();
+          const elapsed = state.playStartTime ? Math.floor((Date.now() - state.playStartTime) / 1000) : 0;
+          if (elapsed > 0 && elapsed <= 35 && elapsed % 10 === 0) {
+            console.log(`[Progress] ${elapsed}s elapsed, hasRecorded: ${state.hasRecordedPlay}, playStartTime: ${state.playStartTime ? 'set' : 'null'}`);
+          }
           checkAndRecordPlay();
         }
       }, 1000);
@@ -89,16 +125,22 @@ export function useTrackProgress() {
         clearInterval(checkIntervalRef.current);
       }
     };
-  }, [playbackState.state, isPlaying, isPreviewMode, checkAndRecordPlay, checkPreviewEnd]);
+  }, [playbackState.state, isPlaying, isPreviewMode, currentTrack, checkAndRecordPlay, checkPreviewEnd]);
 
   // For native player
   if (isNativeAvailable && State) {
+    const isActuallyPlaying = playbackState.state === State.Playing;
+    // Only show buffering if we're in buffering/loading state AND position hasn't advanced past 1 second
+    // This prevents showing buffering spinner when audio is actually playing
+    const rawBuffering = playbackState.state === State.Buffering || playbackState.state === State.Loading;
+    const isBuffering = rawBuffering && progress.position < 1;
+
     return {
       position: progress.position,
       duration: progress.duration,
       buffered: progress.buffered,
-      isPlaying: playbackState.state === State.Playing,
-      isBuffering: playbackState.state === State.Buffering || playbackState.state === State.Loading,
+      isPlaying: isActuallyPlaying,
+      isBuffering,
       activeTrack,
     };
   }

@@ -179,27 +179,29 @@ export default function CommunityScreen() {
 
         return (
             <ScrollView style={styles.roadmapContainer} contentContainerStyle={styles.roadmapContent}>
-                {/* Stats Overview */}
-                <View style={styles.statsOverview}>
-                    <Text style={styles.sectionTitle}>Platform Growth</Text>
-                    <View style={styles.statsGrid}>
-                        <View style={styles.statItem}>
-                            <Ionicons name="people" size={24} color={theme.colors.accent} />
-                            <Text style={styles.statValue}>{stats?.totalUsers.toLocaleString() || 0}</Text>
-                            <Text style={styles.statLabel}>Users</Text>
-                        </View>
-                        <View style={styles.statItem}>
-                            <Ionicons name="mic" size={24} color={theme.colors.accent} />
-                            <Text style={styles.statValue}>{stats?.totalArtists.toLocaleString() || 0}</Text>
-                            <Text style={styles.statLabel}>Artists</Text>
-                        </View>
-                        <View style={styles.statItem}>
-                            <Ionicons name="musical-notes" size={24} color={theme.colors.accent} />
-                            <Text style={styles.statValue}>{stats?.totalTracks.toLocaleString() || 0}</Text>
-                            <Text style={styles.statLabel}>Tracks</Text>
+                {/* Stats Overview - Admin only */}
+                {user?.type === 'admin' && (
+                    <View style={styles.statsOverview}>
+                        <Text style={styles.sectionTitle}>Platform Growth</Text>
+                        <View style={styles.statsGrid}>
+                            <View style={styles.statItem}>
+                                <Ionicons name="people" size={24} color={theme.colors.accent} />
+                                <Text style={styles.statValue}>{stats?.totalUsers.toLocaleString() || 0}</Text>
+                                <Text style={styles.statLabel}>Users</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                                <Ionicons name="mic" size={24} color={theme.colors.accent} />
+                                <Text style={styles.statValue}>{stats?.totalArtists.toLocaleString() || 0}</Text>
+                                <Text style={styles.statLabel}>Artists</Text>
+                            </View>
+                            <View style={styles.statItem}>
+                                <Ionicons name="musical-notes" size={24} color={theme.colors.accent} />
+                                <Text style={styles.statValue}>{stats?.totalTracks.toLocaleString() || 0}</Text>
+                                <Text style={styles.statLabel}>Tracks</Text>
+                            </View>
                         </View>
                     </View>
-                </View>
+                )}
 
                 {/* Feature Roadmap */}
                 <Text style={styles.sectionTitle}>Feature Roadmap</Text>
@@ -319,7 +321,10 @@ export default function CommunityScreen() {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Community</Text>
+                <View>
+                    <Text style={styles.title}>Community</Text>
+                    <Text style={styles.subtitle}>Connect with fellow music lovers</Text>
+                </View>
                 {activeTab === 'feed' && (
                     <TouchableOpacity
                         style={styles.createButton}
@@ -437,16 +442,19 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: theme.spacing.md,
-        paddingVertical: theme.spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border,
+        alignItems: 'flex-start',
+        padding: theme.spacing.lg,
+        paddingBottom: theme.spacing.md,
     },
-    headerTitle: {
-        fontSize: theme.fontSize.xl,
-        fontWeight: 'bold',
+    title: {
+        fontSize: theme.fontSize.xxxl,
+        fontWeight: theme.fontWeight.bold,
         color: theme.colors.textPrimary,
+    },
+    subtitle: {
+        fontSize: theme.fontSize.md,
+        color: theme.colors.textSecondary,
+        marginTop: theme.spacing.xs,
     },
     createButton: {
         padding: theme.spacing.xs,

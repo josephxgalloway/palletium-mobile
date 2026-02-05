@@ -8,17 +8,42 @@ import { useAuthStore } from '@/lib/store/authStore';
 import { useGamificationStore } from '@/lib/store/gamificationStore';
 import { useNetworkStore } from '@/lib/store/networkStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
-import { StripeProvider } from '@stripe/stripe-react-native';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
+
+// Lazy load Stripe - not available in Expo Go
+let StripeProvider: any = null;
+let isStripeAvailable = false;
+try {
+  StripeProvider = require('@stripe/stripe-react-native').StripeProvider;
+  isStripeAvailable = true;
+} catch (e) {
+  console.warn('Stripe not available - running in Expo Go');
+}
+
+// Wrapper that conditionally uses Stripe
+function OptionalStripeProvider({ children }: { children: ReactNode }) {
+  if (isStripeAvailable && StripeProvider) {
+    return (
+      <StripeProvider
+        publishableKey={STRIPE_PUBLISHABLE_KEY}
+        merchantIdentifier="merchant.com.palletium"
+        urlScheme="palletium"
+      >
+        {children}
+      </StripeProvider>
+    );
+  }
+  return <>{children}</>;
+}
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -81,11 +106,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <StripeProvider
-        publishableKey={STRIPE_PUBLISHABLE_KEY}
-        merchantIdentifier="merchant.com.palletium"
-        urlScheme="palletium"
-      >
+      <OptionalStripeProvider>
         <ThemeProvider value={PalletiumTheme}>
           <StatusBar style="light" />
           <Stack
@@ -106,6 +127,13 @@ export default function RootLayout() {
                 gestureDirection: 'vertical',
               }}
             />
+            <Stack.Screen
+              name="upload"
+              options={{
+                presentation: 'modal',
+                headerShown: false,
+              }}
+            />
             <Stack.Screen name="+not-found" />
           </Stack>
           {/* Mini player shows above tab bar */}
@@ -117,7 +145,7 @@ export default function RootLayout() {
           {/* Toast notifications */}
           <Toast config={toastConfig} />
         </ThemeProvider>
-      </StripeProvider>
+      </OptionalStripeProvider>
     </GestureHandlerRootView>
   );
 }
