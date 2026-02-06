@@ -206,7 +206,7 @@ export default function ArtistEarningsScreen() {
                             <View style={[styles.dot, { backgroundColor: theme.colors.success }]} />
                             <View>
                                 <Text style={styles.breakdownLabel}>First Listens</Text>
-                                <Text style={styles.breakdownSubtext}>$1.00 per play (verified)</Text>
+                                <Text style={styles.breakdownSubtext}>$1.00 per play from subscribed listeners</Text>
                             </View>
                         </View>
                         <View style={styles.breakdownValues}>

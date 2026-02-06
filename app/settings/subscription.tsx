@@ -181,7 +181,7 @@ export default function SubscriptionScreen() {
           <Text style={styles.heroTitle}>Unlock Premium Features</Text>
           <Text style={styles.heroSubtitle}>
             {isArtist
-              ? 'Unlock $1.00/play rate and unlimited uploads'
+              ? 'Unlock $1.00/play rate from subscribed listeners'
               : 'Earn rewards while you listen'}
           </Text>
         </LinearGradient>
@@ -381,7 +381,7 @@ export default function SubscriptionScreen() {
                   <View style={styles.artistProFeature}>
                     <Ionicons name="cash" size={24} color="#10B981" />
                     <Text style={styles.artistProFeatureText}>$1.00/Play</Text>
-                    <Text style={styles.artistProFeatureSubtext}>Verified first listens</Text>
+                    <Text style={styles.artistProFeatureSubtext}>From subscribed listeners</Text>
                   </View>
                   <View style={styles.artistProFeature}>
                     <Ionicons name="analytics" size={24} color="#10B981" />

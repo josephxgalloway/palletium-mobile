@@ -104,7 +104,7 @@ export default function VerificationScreen() {
 
             <View style={styles.benefitsCard}>
               <Text style={styles.benefitsTitle}>Your Benefits</Text>
-              <BenefitRow icon="cash" text="$1.00 per first listen" />
+              <BenefitRow icon="cash" text="$1.00 per first listen from subscribed listeners" />
               <BenefitRow icon="repeat" text="$0.01 per repeat listen" />
               <BenefitRow icon="cloud-upload" text="Unlimited track uploads" />
               <BenefitRow icon="eye" text="Immediate discovery visibility" />
@@ -140,13 +140,13 @@ export default function VerificationScreen() {
             </View>
             <Text style={styles.heroTitle}>Upload First</Text>
             <Text style={styles.heroSubtitle}>
-              Upload your first track to create your artist profile, then come back here to verify and unlock the full $1.00/play rate.
+              Upload your first track to create your artist profile, then come back here to verify and unlock the $1.00/play rate from subscribed listeners.
             </Text>
           </LinearGradient>
 
           <View style={styles.benefitsCard}>
             <Text style={styles.benefitsTitle}>After Verification</Text>
-            <BenefitRow icon="cash" text="$1.00 per first listen (vs $0.004 unverified)" />
+            <BenefitRow icon="cash" text="$1.00 per first listen from subscribed listeners" />
             <BenefitRow icon="cloud-upload" text="Unlimited track uploads (vs 3 max)" />
             <BenefitRow icon="eye" text="Immediate discovery visibility" />
             <BenefitRow icon="shield-checkmark" text="Verified artist badge" />
@@ -198,14 +198,14 @@ export default function VerificationScreen() {
           </View>
           <Text style={styles.heroTitle}>Get Verified</Text>
           <Text style={styles.heroSubtitle}>
-            Verify your identity to unlock the full $1.00/play rate, unlimited uploads, and instant discovery.
+            Verify your identity to unlock the $1.00/play rate from subscribed listeners, unlimited uploads, and instant discovery.
           </Text>
         </LinearGradient>
 
         {/* What you get */}
         <View style={styles.benefitsCard}>
           <Text style={styles.benefitsTitle}>Verified Artist Benefits</Text>
-          <BenefitRow icon="cash" text="$1.00 per first listen (vs $0.004 unverified)" />
+          <BenefitRow icon="cash" text="$1.00 per first listen from subscribed listeners" />
           <BenefitRow icon="cloud-upload" text="Unlimited track uploads (vs 3 max)" />
           <BenefitRow icon="eye" text="Immediate discovery visibility" />
           <BenefitRow icon="shield-checkmark" text="Verified artist badge" />

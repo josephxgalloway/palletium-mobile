@@ -91,11 +91,11 @@ export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
   artist_pro_yearly: {
     id: 'artist_pro_yearly',
     name: 'Artist Verification',
-    description: 'Unlock $1.00/play rate and unlimited uploads',
+    description: 'Unlock $1.00/play rate from subscribed listeners',
     price: 49.99,
     interval: 'year',
     features: [
-      '$1.00 per first listen (vs $0.004 unverified)',
+      '$1.00 per first listen from subscribed listeners',
       'Unlimited track uploads',
       'Immediate discovery visibility',
       'Verified artist status',
