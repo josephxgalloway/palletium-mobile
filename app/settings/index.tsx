@@ -10,7 +10,7 @@ import Toast from 'react-native-toast-message';
 
 export default function SettingsScreen() {
     const { logout, user } = useAuthStore();
-    const { isVerifiedArtist } = getUserEntitlements(user);
+    const { isVerifiedArtist, isAdmin } = getUserEntitlements(user);
     const isArtistType = user?.type === 'artist';
 
     // Local state for toggles (mocked for now)
@@ -139,12 +139,14 @@ export default function SettingsScreen() {
                         value={user?.email}
                         type="info"
                     />
-                    <SettingRow
-                        icon="card-outline"
-                        label="Subscription"
-                        value="Free"
-                        onPress={() => router.push('/settings/subscription' as any)}
-                    />
+                    {!isAdmin && (
+                        <SettingRow
+                            icon="card-outline"
+                            label="Subscription"
+                            value="Free"
+                            onPress={() => router.push('/settings/subscription' as any)}
+                        />
+                    )}
                     {isArtistType && (
                         <SettingRow
                             icon="shield-checkmark-outline"
@@ -155,23 +157,25 @@ export default function SettingsScreen() {
                     )}
                 </SettingSection>
 
-                {/* Audio Quality */}
-                <SettingSection title="Audio Quality">
-                    <SettingRow
-                        icon="wifi-outline"
-                        label="High Quality (WiFi)"
-                        type="toggle"
-                        value={highQualityAudio}
-                        onPress={() => setHighQualityAudio(!highQualityAudio)}
-                    />
-                    <SettingRow
-                        icon="cellular-outline"
-                        label="Data Saver (Cellular)"
-                        type="toggle"
-                        value={dataSaver}
-                        onPress={() => setDataSaver(!dataSaver)}
-                    />
-                </SettingSection>
+                {/* Audio Quality (hidden for admins) */}
+                {!isAdmin && (
+                    <SettingSection title="Audio Quality">
+                        <SettingRow
+                            icon="wifi-outline"
+                            label="High Quality (WiFi)"
+                            type="toggle"
+                            value={highQualityAudio}
+                            onPress={() => setHighQualityAudio(!highQualityAudio)}
+                        />
+                        <SettingRow
+                            icon="cellular-outline"
+                            label="Data Saver (Cellular)"
+                            type="toggle"
+                            value={dataSaver}
+                            onPress={() => setDataSaver(!dataSaver)}
+                        />
+                    </SettingSection>
+                )}
 
                 {/* Cache & Storage */}
                 <SettingSection title="Storage">

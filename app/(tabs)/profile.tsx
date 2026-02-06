@@ -297,7 +297,7 @@ export default function ProfileScreen() {
   }
 
   const isArtist = user.type === 'artist';
-  const { roleLabel, isVerifiedArtist } = getUserEntitlements(user);
+  const { roleLabel, isVerifiedArtist, isAdmin } = getUserEntitlements(user);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -355,8 +355,8 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Prominent Earnings/Rewards Button */}
-            {!loading && (
+        {/* Prominent Earnings/Rewards Button (hidden for admins) */}
+            {!loading && !isAdmin && (
               <TouchableOpacity
                 style={styles.earningsButton}
                 onPress={() => router.push(isArtist ? '/stats/earnings' : '/stats/dividends' as any)}
@@ -398,10 +398,10 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Stats Grid */}
+            {/* Stats Grid (hidden for admins) */}
             {loading ? (
               <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />
-            ) : (
+            ) : !isAdmin ? (
               <View style={styles.statsGrid}>
                 {isArtist ? (
                   <>
@@ -448,10 +448,10 @@ export default function ProfileScreen() {
                   </>
                 )}
               </View>
-            )}
+            ) : null}
 
-            {/* Analytics Section */}
-            {!isArtist && !loading && (
+            {/* Analytics Section (hidden for admins) */}
+            {!isArtist && !isAdmin && !loading && (
               <TouchableOpacity
                 style={styles.analyticsButton}
                 onPress={() => router.push('/insights/taste' as any)}
@@ -469,8 +469,8 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Upload Music CTA for listeners */}
-            {!isArtist && !loading && (
+            {/* Upload Music CTA for listeners (hidden for admins) */}
+            {!isArtist && !isAdmin && !loading && (
               <TouchableOpacity
                 style={styles.analyticsButton}
                 onPress={() => router.push('/upload' as any)}
@@ -522,12 +522,14 @@ export default function ProfileScreen() {
                 label="Settings"
                 onPress={() => router.push('/settings' as any)}
               />
-              <MenuItem
-                icon="card-outline"
-                label="Subscription"
-                sublabel={user.subscription_status === 'active' ? 'Premium' : 'Free'}
-                onPress={() => router.push('/settings/subscription' as any)}
-              />
+              {!isAdmin && (
+                <MenuItem
+                  icon="card-outline"
+                  label="Subscription"
+                  sublabel={user.subscription_status === 'active' ? 'Premium' : 'Free'}
+                  onPress={() => router.push('/settings/subscription' as any)}
+                />
+              )}
               <MenuItem
                 icon="help-circle-outline"
                 label="Help & Support"

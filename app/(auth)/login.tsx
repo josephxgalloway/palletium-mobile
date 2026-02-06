@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '@/lib/store/authStore';
+import { getUserEntitlements } from '@/lib/entitlements';
 import api from '@/lib/api/client';
 import { theme } from '@/constants/theme';
 
@@ -38,10 +39,16 @@ export default function LoginScreen() {
     requires2FA
   } = useAuthStore();
 
+  const getPostLoginRoute = () => {
+    const user = useAuthStore.getState().user;
+    const { isAdmin } = getUserEntitlements(user);
+    return isAdmin ? '/(tabs)/admin-dashboard' : '/(tabs)';
+  };
+
   const handleLogin = async () => {
     const result = await login(email, password);
     if (result === true) {
-      router.replace('/(tabs)');
+      router.replace(getPostLoginRoute() as any);
     }
     // If result === '2fa', the store will set requires2FA = true
     // and we'll show the 2FA verification screen
@@ -98,7 +105,7 @@ export default function LoginScreen() {
               isLoading: false,
             });
 
-            router.replace('/(tabs)');
+            router.replace(getPostLoginRoute() as any);
           }
         }
       }
@@ -115,7 +122,7 @@ export default function LoginScreen() {
   const handleVerify2FA = async () => {
     const success = await verify2FA(twoFactorCode);
     if (success) {
-      router.replace('/(tabs)');
+      router.replace(getPostLoginRoute() as any);
     }
   };
 

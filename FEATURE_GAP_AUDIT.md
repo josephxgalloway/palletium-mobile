@@ -443,3 +443,76 @@ The mobile app now normalizes API field names to handle differences between web 
 - `hooks/useTrackProgress.ts` - Buffering state fix
 - `lib/api/client.ts` - Added logging, `getArtistTracks` improvements
 - `types/index.ts` - Added alternative API field names to `DashboardStats`
+
+---
+
+## Phase 93-B Mobile Parity (February 5, 2026)
+
+**$1.00 Copy Qualification:**
+All user-facing "$1.00 per first listen" instances updated to include "from subscribed listeners" qualifier, matching production backend truth (premium payout requires subscribed listener + verified artist).
+
+**Audit Results:**
+| Check | Result |
+|-------|--------|
+| "Artist Pro" / "Artist Starter" | 0 hits |
+| "ad-free" / "ad free" | 0 hits |
+| "revenue share" | 0 hits |
+| All "$1.00" qualified | Yes |
+| Entitlements treats trialing as subscribed | Already correct |
+| Rewards screens have hard paywall | Already correct |
+| Verification flow refreshes via checkAuth() | Already correct |
+
+**Files Changed (6 files, 12 edits):**
+- `app/stats/earnings.tsx` — "$1.00 per play (verified)" → "from subscribed listeners"
+- `app/settings/verification.tsx` — 5 instances qualified (benefits, hero text, comparison)
+- `app/settings/subscription.tsx` — Hero subtitle + feature card subtext updated
+- `app/track/[id].tsx` — "Verified artist earns $1.00" → "+ from subscribed listeners"
+- `components/SignupPromptModal.tsx` — Benefit row qualified
+- `lib/api/subscription.ts` — Plan description + feature list qualified
+
+---
+
+## Admin Mobile Tab Navigation (February 5, 2026)
+
+**Admin-Specific Tab Bar:**
+Admin users now see dedicated tabs: Dashboard, Review, Trust & Safety, Payments, Profile — replacing the standard Discover, Library, Rewards, Studio tabs.
+
+**Admin Service Layer:**
+- `lib/api/admin.service.ts` — Centralized admin API service with typed interfaces
+- Endpoints: analytics, system-health, review metrics, track review queue, fraud reports, content moderation, financial metrics, proof of earnings
+- All types matched to actual backend `/admin/*` response shapes (nested objects for analytics, fraud flags)
+
+**Admin Tab Screens:**
+- `app/(tabs)/admin-dashboard.tsx` — Platform Health banner (API RPM, active users, DB response), stats grid (users/artists/listeners/tracks/plays/revenue), financial overview, pending reviews, revenue growth, quick action deep links
+- `app/(tabs)/admin-review.tsx` — Review queue with metrics banner, filter tabs (pending/approved/rejected), one-tap approve, reject with reason prompt, optimistic UI updates
+- `app/(tabs)/admin-trust.tsx` — Fraud detection overview, risk categories, content moderation stats, recent flags with nested user/fraudRisk data
+- `app/(tabs)/admin-payments.tsx` — Revenue banner, costs breakdown, proof of earnings grid, 30-day liability metrics, payment tier reference
+
+**Conditional Tab Rendering:**
+- `app/(tabs)/_layout.tsx` — Uses `href: null` (hide) vs `href: undefined` (show) pattern for conditional tabs based on `isAdmin` from entitlements
+
+**Admin Profile/Settings Cleanup:**
+- `app/(tabs)/profile.tsx` — Hidden for admins: Earnings button, Stats Grid, Taste Evolution, Upload Music, Subscription menu item
+- `app/settings/index.tsx` — Hidden for admins: Subscription row, Audio Quality section
+
+**Admin Login Landing:**
+- `app/(auth)/login.tsx` — Admin accounts redirect to `/(tabs)/admin-dashboard` after login (password, OAuth, 2FA)
+
+**API Type Accuracy Fixes:**
+- `AdminAnalytics` — Changed from flat fields to nested `{ users, tracks, revenue, growth }` matching actual API
+- `FraudReport.recentFlags` — Changed from flat `user_name`/`risk_score` to nested `user.name`/`fraudRisk.riskScore`
+- `SystemHealth` — Added `storage` field
+- DB response time rounded with `Math.round()` for clean display
+
+**Files Created (5):**
+- `lib/api/admin.service.ts`
+- `app/(tabs)/admin-dashboard.tsx`
+- `app/(tabs)/admin-review.tsx`
+- `app/(tabs)/admin-trust.tsx`
+- `app/(tabs)/admin-payments.tsx`
+
+**Files Modified (4):**
+- `app/(tabs)/_layout.tsx`
+- `app/(tabs)/profile.tsx`
+- `app/settings/index.tsx`
+- `app/(auth)/login.tsx`

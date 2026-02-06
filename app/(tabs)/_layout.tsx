@@ -1,4 +1,5 @@
 import { theme } from '@/constants/theme';
+import { getUserEntitlements } from '@/lib/entitlements';
 import { useAuthStore } from '@/lib/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
@@ -7,7 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, user } = useAuthStore();
+  const { isAdmin } = getUserEntitlements(user);
 
   // Redirect to login if not authenticated
   if (!isLoading && !isAuthenticated) {
@@ -17,6 +19,10 @@ export default function TabLayout() {
   // Calculate proper bottom padding for iPhone notch/home indicator
   const bottomPadding = Math.max(insets.bottom, 8);
   const tabBarHeight = 56 + bottomPadding;
+
+  // Conditional href: null hides from tab bar, undefined shows it
+  const showForUsers = isAdmin ? null : undefined;
+  const showForAdmins = isAdmin ? undefined : null;
 
   return (
     <Tabs
@@ -53,10 +59,12 @@ export default function TabLayout() {
         headerShown: false,
       }}
     >
+      {/* ===== NON-ADMIN TABS (hidden for admins) ===== */}
       <Tabs.Screen
         name="index"
         options={{
           title: 'Discover',
+          href: showForUsers,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="compass" size={size} color={color} />
           ),
@@ -66,13 +74,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          href: null, // Hide from tab bar
+          href: null, // Always hidden
         }}
       />
       <Tabs.Screen
         name="library"
         options={{
           title: 'Library',
+          href: showForUsers,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="library" size={size} color={color} />
           ),
@@ -82,7 +91,7 @@ export default function TabLayout() {
         name="rewards"
         options={{
           title: 'Rewards',
-          // Always visible — paywall inside screen handles subscription gating
+          href: showForUsers,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="gift" size={size} color={color} />
           ),
@@ -92,7 +101,7 @@ export default function TabLayout() {
         name="studio"
         options={{
           title: 'Studio',
-          // Always visible — upload screen handles gating for unverified users
+          href: showForUsers,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="mic" size={size} color={color} />
           ),
@@ -102,16 +111,60 @@ export default function TabLayout() {
       <Tabs.Screen
         name="community"
         options={{
-          href: null, // Hide from tab bar
+          href: null, // Always hidden
         }}
       />
       {/* Journey tab hidden - feature not yet available */}
       <Tabs.Screen
         name="journey"
         options={{
-          href: null, // Hide from tab bar
+          href: null, // Always hidden
         }}
       />
+
+      {/* ===== ADMIN TABS (hidden for non-admins) ===== */}
+      <Tabs.Screen
+        name="admin-dashboard"
+        options={{
+          title: 'Dashboard',
+          href: showForAdmins,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="grid" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="admin-review"
+        options={{
+          title: 'Review',
+          href: showForAdmins,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="clipboard" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="admin-trust"
+        options={{
+          title: 'Trust',
+          href: showForAdmins,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="shield-checkmark" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="admin-payments"
+        options={{
+          title: 'Payments',
+          href: showForAdmins,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="card" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* ===== SHARED TAB ===== */}
       <Tabs.Screen
         name="profile"
         options={{
