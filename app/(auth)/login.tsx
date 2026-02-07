@@ -59,60 +59,52 @@ export default function LoginScreen() {
     clearError();
 
     try {
-      // Get the auth URL from backend
-      const response = await api.get('/oauth/google/authorize');
-      const { authUrl, state } = response.data;
+      // Get the auth URL from backend (platform=mobile triggers backend redirect flow)
+      const response = await api.get('/oauth/google/authorize?platform=mobile');
+      const { authUrl } = response.data;
 
       if (!authUrl) {
         throw new Error('Failed to get authentication URL');
       }
 
-      // Open Google auth in browser
+      // Open Google auth in browser — Google redirects to backend,
+      // backend exchanges code and redirects to palletium://oauth/callback?token=xxx
       const result = await WebBrowser.openAuthSessionAsync(
         authUrl,
         'palletium://oauth/callback'
       );
 
       if (result.type === 'success' && result.url) {
-        // Parse the callback URL
         const url = new URL(result.url);
-        const code = url.searchParams.get('code');
-        const returnedState = url.searchParams.get('state');
+        const token = url.searchParams.get('token');
+        const error = url.searchParams.get('error');
 
-        if (code && returnedState === state) {
-          // Exchange code for token
-          const tokenResponse = await api.post('/oauth/google/callback', {
-            code,
-            state: returnedState,
-            redirectUri: 'palletium://oauth/callback',
+        if (error) {
+          throw new Error(error);
+        }
+
+        if (token) {
+          await SecureStore.setItemAsync('accessToken', token);
+
+          // Fetch user profile with the new token
+          const profileResponse = await api.get('/auth/me', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const user = profileResponse.data.user || profileResponse.data;
+
+          useAuthStore.setState({
+            user,
+            isAuthenticated: true,
+            isLoading: false,
           });
 
-          const data = tokenResponse.data;
-          const accessToken = data.accessToken || data.token;
-          const refreshToken = data.refreshToken || '';
-          const user = data.user;
-
-          if (accessToken) {
-            await SecureStore.setItemAsync('accessToken', accessToken);
-            if (refreshToken) {
-              await SecureStore.setItemAsync('refreshToken', refreshToken);
-            }
-
-            // Update auth store
-            useAuthStore.setState({
-              user,
-              isAuthenticated: true,
-              isLoading: false,
-            });
-
-            router.replace(getPostLoginRoute() as any);
-          }
+          router.replace(getPostLoginRoute() as any);
         }
       }
     } catch (error: any) {
       console.error('Google Sign In error:', error);
       useAuthStore.setState({
-        error: error.response?.data?.message || 'Google Sign In failed. Please try again.',
+        error: error.response?.data?.message || error.message || 'Google Sign In failed. Please try again.',
       });
     } finally {
       setGoogleLoading(false);
