@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import axios from 'axios';
 import api from '../api/client';
 import type { User } from '../../types';
 
@@ -17,6 +18,8 @@ interface AuthState {
   cancel2FA: () => void;
   register: (data: RegisterData) => Promise<boolean>;
   logout: () => Promise<void>;
+  /** Network-free cleanup — safe to call from the 401 interceptor without triggering more API calls. */
+  clearLocalAuthState: () => void;
   checkAuth: () => Promise<void>;
   clearError: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -141,7 +144,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  clearLocalAuthState: () => {
+    set({ user: null, isAuthenticated: false, isLoading: false, error: null });
+  },
+
   logout: async () => {
+    // D-01: Revoke refresh token server-side before clearing local state.
+    // Uses raw axios (not the api instance) to avoid interceptor chain —
+    // the access token may be expired, and the logout endpoint has no auth middleware.
+    try {
+      const refreshToken = await SecureStore.getItemAsync('refreshToken');
+      if (refreshToken) {
+        // baseURL is API_URL from client.ts, e.g. "https://api.palletium.com/api"
+        const logoutUrl = `${api.defaults.baseURL}/auth/logout`;
+        if (__DEV__) console.log('[logout] revoking refresh token at:', logoutUrl);
+        await axios.post(logoutUrl, { refreshToken }).catch(() => {});
+      }
+    } catch {}
     try {
       await SecureStore.deleteItemAsync('accessToken');
       await SecureStore.deleteItemAsync('refreshToken');

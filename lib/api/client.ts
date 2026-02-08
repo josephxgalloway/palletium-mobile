@@ -41,14 +41,47 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Response interceptor - handle token refresh
+// --- Single-flight refresh dedup (D-02) ---
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: any) => void;
+}> = [];
+
+function processQueue(error: any, token: string | null) {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token!);
+    }
+  });
+  failedQueue = [];
+}
+
+// Response interceptor - handle token refresh with single-flight dedup
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // If a refresh is already in flight, queue this request and wait
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({
+            resolve: (token: string) => {
+              originalRequest._retry = true;
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(api(originalRequest));
+            },
+            reject,
+          });
+        });
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
         const refreshToken = await SecureStore.getItemAsync('refreshToken');
@@ -56,6 +89,7 @@ api.interceptors.response.use(
           throw new Error('No refresh token');
         }
 
+        // Raw axios to avoid interceptor recursion
         const response = await axios.post(`${API_URL}/auth/refresh`, {
           refreshToken,
         });
@@ -64,13 +98,29 @@ api.interceptors.response.use(
         await SecureStore.setItemAsync('accessToken', accessToken);
         await SecureStore.setItemAsync('refreshToken', newRefreshToken);
 
+        // Resolve all queued requests with the new token
+        processQueue(null, accessToken);
+
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed - clear tokens
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
+        // Reject all queued requests
+        processQueue(refreshError, null);
+
+        // D-03: Hard logout — clear tokens and reset Zustand auth state.
+        // Lazy require breaks the circular dependency (authStore imports client).
+        try {
+          await SecureStore.deleteItemAsync('accessToken');
+          await SecureStore.deleteItemAsync('refreshToken');
+        } catch {}
+        try {
+          const { useAuthStore } = require('../store/authStore');
+          useAuthStore.getState().clearLocalAuthState();
+        } catch {}
+
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
 
