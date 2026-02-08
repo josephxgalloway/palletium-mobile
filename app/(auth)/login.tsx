@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '@/lib/store/authStore';
 import { getUserEntitlements } from '@/lib/entitlements';
@@ -29,6 +30,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const {
     login,
     verify2FA,
@@ -52,6 +54,65 @@ export default function LoginScreen() {
     }
     // If result === '2fa', the store will set requires2FA = true
     // and we'll show the 2FA verification screen
+  };
+
+  const handleAppleSignIn = async () => {
+    setAppleLoading(true);
+    clearError();
+
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        throw new Error('Apple Sign-In did not return an identity token');
+      }
+
+      // Send identity token to backend for verification
+      const response = await api.post('/oauth/apple/mobile-token', {
+        identityToken: credential.identityToken,
+        fullName: credential.fullName ? {
+          givenName: credential.fullName.givenName || undefined,
+          familyName: credential.fullName.familyName || undefined,
+        } : undefined,
+        email: credential.email || undefined,
+      });
+
+      const data = response.data;
+      const accessToken = data.token || data.accessToken;
+      const refreshToken = data.refreshToken || '';
+
+      if (accessToken && typeof accessToken === 'string') {
+        await SecureStore.setItemAsync('accessToken', accessToken);
+      }
+      if (refreshToken && typeof refreshToken === 'string') {
+        await SecureStore.setItemAsync('refreshToken', refreshToken);
+      }
+
+      const user = data.user;
+      useAuthStore.setState({
+        user,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+
+      router.replace(getPostLoginRoute() as any);
+    } catch (error: any) {
+      // User cancelled — not an error
+      if (error.code === 'ERR_REQUEST_CANCELED') {
+        return;
+      }
+      console.error('Apple Sign In error:', error);
+      useAuthStore.setState({
+        error: error.response?.data?.error || error.message || 'Apple Sign In failed. Please try again.',
+      });
+    } finally {
+      setAppleLoading(false);
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -222,6 +283,17 @@ export default function LoginScreen() {
             </View>
           )}
 
+          {/* Apple Sign In Button — iOS only (Apple HIG: must appear above other social logins) */}
+          {Platform.OS === 'ios' && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+              cornerRadius={theme.borderRadius.lg}
+              style={styles.appleButton}
+              onPress={handleAppleSignIn}
+            />
+          )}
+
           {/* Google Sign In Button */}
           <TouchableOpacity
             style={styles.googleButton}
@@ -373,6 +445,10 @@ const styles = StyleSheet.create({
     flex: 1,
     color: theme.colors.error,
     fontSize: theme.fontSize.sm,
+  },
+  appleButton: {
+    height: 50,
+    width: '100%' as const,
   },
   googleButton: {
     flexDirection: 'row',
