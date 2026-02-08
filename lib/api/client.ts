@@ -1,8 +1,24 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-const API_URL = 'https://palletium.com/api';
-console.log('API_URL:', API_URL);
+/**
+ * API base URL — sourced from EXPO_PUBLIC_API_URL (set per build profile in eas.json).
+ *   production / preview: https://api.palletium.com
+ *   development:          http://localhost:3001
+ * The env var is the origin; we append /api so route paths stay relative (/auth/login, /tracks, etc.).
+ */
+const API_ORIGIN = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/+$/, '');
+if (!API_ORIGIN) {
+  throw new Error(
+    'EXPO_PUBLIC_API_URL is not set. Define it in eas.json (build profiles) or .env for local dev.'
+  );
+}
+// Append /api unless the env var already includes it (prevents /api/api)
+const API_URL = API_ORIGIN.endsWith('/api') ? API_ORIGIN : `${API_ORIGIN}/api`;
+
+if (__DEV__) {
+  console.log('[api/client] API_URL:', API_URL);
+}
 
 export const api = axios.create({
   baseURL: API_URL,

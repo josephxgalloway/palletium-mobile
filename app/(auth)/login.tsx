@@ -138,6 +138,7 @@ export default function LoginScreen() {
       if (result.type === 'success' && result.url) {
         const url = new URL(result.url);
         const token = url.searchParams.get('token');
+        const refreshToken = url.searchParams.get('refreshToken');
         const error = url.searchParams.get('error');
 
         if (error) {
@@ -146,6 +147,11 @@ export default function LoginScreen() {
 
         if (token) {
           await SecureStore.setItemAsync('accessToken', token);
+          if (refreshToken) {
+            await SecureStore.setItemAsync('refreshToken', refreshToken);
+          } else {
+            console.warn('[Google OAuth] Backend did not include refreshToken in callback URL');
+          }
 
           // Fetch user profile with the new token
           const profileResponse = await api.get('/auth/me', {
