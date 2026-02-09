@@ -37,7 +37,8 @@ const TIER_COLORS = {
 
 export default function SubscriptionScreen() {
   const { user } = useAuthStore();
-  const params = useLocalSearchParams<{ success?: string; canceled?: string }>();
+  const params = useLocalSearchParams<{ success?: string; canceled?: string; newUser?: string }>();
+  const isNewUser = params.newUser === 'true';
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -162,7 +163,7 @@ export default function SubscriptionScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => isNewUser ? router.replace('/(tabs)') : router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Choose Your Plan</Text>
@@ -170,6 +171,19 @@ export default function SubscriptionScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* New User Welcome Banner */}
+        {isNewUser && (
+          <View style={styles.welcomeBanner}>
+            <Ionicons name="checkmark-circle" size={24} color={theme.colors.success} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.welcomeTitle}>Account Created!</Text>
+              <Text style={styles.welcomeSubtitle}>
+                Streaming is free. Subscribe to earn listener rewards from first listens on verified artists.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Hero Section */}
         <LinearGradient
           colors={['rgba(184, 134, 11, 0.15)', 'transparent']}
@@ -178,11 +192,15 @@ export default function SubscriptionScreen() {
           <View style={styles.heroIconContainer}>
             <Ionicons name="diamond" size={48} color={theme.colors.accent} />
           </View>
-          <Text style={styles.heroTitle}>Unlock Premium Features</Text>
+          <Text style={styles.heroTitle}>
+            {isNewUser ? 'Start Your Free Trial' : 'Unlock Premium Features'}
+          </Text>
           <Text style={styles.heroSubtitle}>
             {isArtist
               ? 'Unlock $1.00/play rate from subscribed listeners'
-              : 'Earn rewards while you listen'}
+              : isNewUser
+                ? '7-day free trial — cancel anytime'
+                : 'Earn rewards while you listen'}
           </Text>
         </LinearGradient>
 
@@ -468,6 +486,16 @@ export default function SubscriptionScreen() {
               </Text>
             </LinearGradient>
           </View>
+        )}
+
+        {/* Skip for now (new users only) */}
+        {isNewUser && !isSubscribed && (
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={() => router.replace('/(tabs)')}
+          >
+            <Text style={styles.skipButtonText}>Skip for now — start listening</Text>
+          </TouchableOpacity>
         )}
 
         {/* Footer */}
@@ -880,5 +908,36 @@ const styles = StyleSheet.create({
   },
   footerDot: {
     color: theme.colors.textMuted,
+  },
+  welcomeBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  welcomeTitle: {
+    color: theme.colors.textPrimary,
+    fontWeight: '600',
+    fontSize: theme.fontSize.md,
+  },
+  welcomeSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.sm,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  skipButton: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  skipButtonText: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.md,
   },
 });

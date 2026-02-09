@@ -23,16 +23,33 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [userType, setUserType] = useState<'listener' | 'artist'>('listener');
   const [showPassword, setShowPassword] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const { register, isLoading, error, clearError } = useAuthStore();
 
   const handleRegister = async () => {
-    const success = await register({ name, email, password, type: userType });
+    const success = await register({
+      name,
+      email,
+      password,
+      type: userType,
+      legalAcceptance: {
+        termsAccepted: true,
+        privacyAccepted: true,
+        version: '2.4.0',
+        acceptedAt: new Date().toISOString(),
+      },
+    });
     if (success) {
-      router.replace('/(tabs)');
+      if (userType === 'listener') {
+        // Redirect new listeners to subscription page with trial CTA
+        router.replace('/settings/subscription?newUser=true');
+      } else {
+        router.replace('/(tabs)');
+      }
     }
   };
 
-  const isValid = name.length > 0 && email.length > 0 && password.length >= 6;
+  const isValid = name.length > 0 && email.length > 0 && password.length >= 8 && legalAccepted;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -145,7 +162,7 @@ export default function RegisterScreen() {
               <Ionicons name="lock-closed" size={20} color={theme.colors.textMuted} />
               <TextInput
                 style={styles.input}
-                placeholder="Password (min 6 characters)"
+                placeholder="Password (min 8 characters)"
                 placeholderTextColor={theme.colors.textMuted}
                 value={password}
                 onChangeText={(text) => {
@@ -162,6 +179,35 @@ export default function RegisterScreen() {
                 />
               </TouchableOpacity>
             </View>
+
+            {/* Legal Acceptance */}
+            <TouchableOpacity
+              style={styles.legalRow}
+              onPress={() => setLegalAccepted(!legalAccepted)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, legalAccepted && styles.checkboxChecked]}>
+                {legalAccepted && (
+                  <Ionicons name="checkmark" size={14} color={theme.colors.background} />
+                )}
+              </View>
+              <Text style={styles.legalText}>
+                I agree to the{' '}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => router.push('/settings/legal')}
+                >
+                  Terms of Service
+                </Text>
+                {' '}and{' '}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => router.push('/settings/legal')}
+                >
+                  Privacy Policy
+                </Text>
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.button, !isValid && styles.buttonDisabled]}
@@ -313,5 +359,36 @@ const styles = StyleSheet.create({
   link: {
     color: theme.colors.primary,
     fontWeight: theme.fontWeight.semibold,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  legalText: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+  },
+  legalLink: {
+    color: theme.colors.primary,
+    fontWeight: theme.fontWeight.medium,
   },
 });

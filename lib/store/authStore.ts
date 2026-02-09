@@ -30,6 +30,12 @@ interface RegisterData {
   password: string;
   name: string;
   type: 'artist' | 'listener';
+  legalAcceptance?: {
+    termsAccepted: boolean;
+    privacyAccepted: boolean;
+    version: string;
+    acceptedAt: string;
+  };
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
