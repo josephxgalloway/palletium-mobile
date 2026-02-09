@@ -120,8 +120,8 @@ export default function LoginScreen() {
     clearError();
 
     try {
-      // Get the auth URL from backend (platform=mobile triggers backend redirect flow)
-      const response = await api.get('/oauth/google/authorize?platform=mobile');
+      // Get the auth URL from dedicated mobile-init endpoint (stable redirect_uri)
+      const response = await api.get('/oauth/google/mobile-init');
       const { authUrl } = response.data;
 
       if (!authUrl) {
