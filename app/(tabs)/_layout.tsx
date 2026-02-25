@@ -1,3 +1,4 @@
+import { LegalGuard } from '@/components/LegalGuard';
 import { theme } from '@/constants/theme';
 import { getUserEntitlements } from '@/lib/entitlements';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -25,6 +26,7 @@ export default function TabLayout() {
   const showForAdmins = isAdmin ? undefined : null;
 
   return (
+    <LegalGuard>
     <Tabs
       screenOptions={{
         tabBarStyle: {
@@ -175,5 +177,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </LegalGuard>
   );
 }

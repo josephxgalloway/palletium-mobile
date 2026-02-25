@@ -1,6 +1,7 @@
 import MiniPlayer from '@/components/player/MiniPlayer';
 import SignupPromptModal from '@/components/SignupPromptModal';
 import { ArtistPlayToast } from '@/components/artist/ArtistPlayToast';
+import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { toastConfig } from '@/components/ui/Toast';
 import { theme } from '@/constants/theme';
 import { setupPlayer } from '@/lib/audio/trackPlayer';
@@ -13,7 +14,8 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState, ReactNode } from 'react';
+import { useEffect, useRef, useState, ReactNode } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 
@@ -62,11 +64,12 @@ const PalletiumTheme = {
 };
 
 export default function RootLayout() {
-  const { checkAuth, isLoading } = useAuthStore();
+  const { checkAuth, isLoading, isAuthenticated } = useAuthStore();
   const { initialize: initNetwork } = useNetworkStore();
   const { loadPreviewCount } = usePlayerStore();
   const { fetchStats } = useGamificationStore();
   const [playerReady, setPlayerReady] = useState(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -93,6 +96,19 @@ export default function RootLayout() {
     const unsubscribe = initNetwork();
     return () => unsubscribe();
   }, []);
+
+  // Refresh user profile when app returns to foreground (e.g., after email verification in browser)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+        if (isAuthenticated) {
+          checkAuth();
+        }
+      }
+      appStateRef.current = nextState;
+    });
+    return () => subscription.remove();
+  }, [isAuthenticated, checkAuth]);
 
   useEffect(() => {
     if (loaded && !isLoading) {
@@ -136,6 +152,8 @@ export default function RootLayout() {
             />
             <Stack.Screen name="+not-found" />
           </Stack>
+          {/* Email verification banner for unverified users */}
+          {isAuthenticated && <EmailVerificationBanner />}
           {/* Mini player shows above tab bar */}
           <MiniPlayer />
           {/* Signup prompt for free users */}

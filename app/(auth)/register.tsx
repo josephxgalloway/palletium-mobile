@@ -35,7 +35,7 @@ export default function RegisterScreen() {
       legalAcceptance: {
         termsAccepted: true,
         privacyAccepted: true,
-        version: '2.4.0',
+        version: 'v2.5.0',
         acceptedAt: new Date().toISOString(),
       },
     });

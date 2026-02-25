@@ -15,6 +15,8 @@ export interface User {
   is_admin?: boolean;
   /** Artist identity verification via Stripe Identity (backend field: isVerified) */
   isVerified?: boolean;
+  /** Email verification status — rewards gated by this field */
+  email_verified?: boolean;
 }
 
 export interface Track {
