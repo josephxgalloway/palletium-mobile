@@ -212,7 +212,7 @@ export default function ArtistEarningsScreen() {
                         <View style={styles.breakdownValues}>
                             <Text style={styles.breakdownCount}>{formatNumber(summary?.first_listens || 0)}</Text>
                             <Text style={styles.breakdownAmount}>
-                                ${((summary?.first_listen_earnings || (summary?.first_listens || 0) * 100) / 100).toFixed(2)}
+                                ${((summary?.first_listen_earnings || 0) / 100).toFixed(2)}
                             </Text>
                         </View>
                     </View>
@@ -230,7 +230,7 @@ export default function ArtistEarningsScreen() {
                         <View style={styles.breakdownValues}>
                             <Text style={styles.breakdownCount}>{formatNumber(summary?.repeat_listens || 0)}</Text>
                             <Text style={styles.breakdownAmount}>
-                                ${((summary?.repeat_listen_earnings || (summary?.repeat_listens || 0)) / 100).toFixed(2)}
+                                ${((summary?.repeat_listen_earnings || 0) / 100).toFixed(2)}
                             </Text>
                         </View>
                     </View>
@@ -260,7 +260,7 @@ export default function ArtistEarningsScreen() {
             <View style={styles.payoutInfo}>
                 <Ionicons name="information-circle" size={18} color={theme.colors.textMuted} />
                 <Text style={styles.payoutText}>
-                    Payouts are processed monthly when your balance exceeds $10
+                    Payouts are processed monthly when your balance exceeds $50
                 </Text>
             </View>
 

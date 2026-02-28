@@ -39,16 +39,12 @@ interface RewardStats {
 const dividendTypeLabels: Record<string, string> = {
   discovery: 'New Discovery',
   listen: 'Track Listen',
-  referral: 'Referral Bonus',
-  bonus: 'Special Bonus',
   tier_multiplier: 'Tier Multiplier'
 };
 
 const dividendTypeColors: Record<string, string> = {
   discovery: theme.colors.accent,
   listen: theme.colors.success,
-  referral: '#A855F7',
-  bonus: theme.colors.warning,
   tier_multiplier: theme.colors.primary
 };
 
@@ -294,7 +290,7 @@ export default function RewardsScreen() {
         {/* Filter Tabs */}
         <View style={styles.filterContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {['all', 'discovery', 'listen', 'referral', 'bonus'].map((filter) => (
+            {['all', 'discovery', 'listen'].map((filter) => (
               <TouchableOpacity
                 key={filter}
                 style={[
@@ -380,22 +376,22 @@ export default function RewardsScreen() {
             <View style={styles.howItWorksCard}>
               <Ionicons name="compass" size={20} color={theme.colors.accent} />
               <Text style={styles.howItWorksTitle}>Discovery Rewards</Text>
-              <Text style={styles.howItWorksDesc}>Earn rewards when you discover new music. First listens count!</Text>
+              <Text style={styles.howItWorksDesc}>Earn rewards from first listens on verified artists.</Text>
             </View>
             <View style={styles.howItWorksCard}>
               <Ionicons name="trending-up" size={20} color={theme.colors.success} />
               <Text style={styles.howItWorksTitle}>Tier Multipliers</Text>
-              <Text style={styles.howItWorksDesc}>Higher tiers earn more rewards on every stream.</Text>
+              <Text style={styles.howItWorksDesc}>Higher tiers earn more rewards on every discovery.</Text>
             </View>
             <View style={styles.howItWorksCard}>
-              <Ionicons name="people" size={20} color="#A855F7" />
-              <Text style={styles.howItWorksTitle}>Referral Bonuses</Text>
-              <Text style={styles.howItWorksDesc}>Invite friends to earn bonus rewards when they join.</Text>
+              <Ionicons name="shield-checkmark" size={20} color={theme.colors.primary} />
+              <Text style={styles.howItWorksTitle}>Eligibility</Text>
+              <Text style={styles.howItWorksDesc}>Active subscription and verified email required to earn rewards.</Text>
             </View>
             <View style={styles.howItWorksCard}>
-              <Ionicons name="flash" size={20} color={theme.colors.warning} />
-              <Text style={styles.howItWorksTitle}>Special Bonuses</Text>
-              <Text style={styles.howItWorksDesc}>Complete challenges for special bonus rewards.</Text>
+              <Ionicons name="cash" size={20} color={theme.colors.warning} />
+              <Text style={styles.howItWorksTitle}>Payouts</Text>
+              <Text style={styles.howItWorksDesc}>Rewards accrue automatically. Configure Stripe Connect to withdraw.</Text>
             </View>
           </View>
 

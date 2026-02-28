@@ -204,18 +204,14 @@ export default function ProfileScreen() {
       // Handle wrapped response: { stats: {...} } or direct {...}
       const dashboardData = response.data?.stats || response.data;
 
-      // Dashboard may return values in cents for revenue - convert to dollars
-      // Check if values look like cents (> 100 for typical earnings)
+      // Dashboard returns revenue values in cents — always divide by 100
       const rawEarnings = dashboardData.total_earnings ?? dashboardData.total_revenue ?? 0;
       const rawPending = dashboardData.pending_earnings ?? dashboardData.pending_revenue ?? 0;
 
-      // If values are large (likely cents), convert to dollars
-      const isCents = rawEarnings > 1000 || rawPending > 1000;
-
       const normalizedStats: DashboardStats = {
         ...dashboardData,
-        total_earnings: isCents ? rawEarnings / 100 : rawEarnings,
-        pending_earnings: isCents ? rawPending / 100 : rawPending,
+        total_earnings: rawEarnings / 100,
+        pending_earnings: rawPending / 100,
         track_count: dashboardData.track_count ?? dashboardData.total_tracks ?? 0,
       };
 
@@ -359,7 +355,7 @@ export default function ProfileScreen() {
             {!loading && !isAdmin && (
               <TouchableOpacity
                 style={styles.earningsButton}
-                onPress={() => router.push(isArtist ? '/stats/earnings' : '/stats/dividends' as any)}
+                onPress={() => router.push(isArtist ? '/stats/earnings' : '/(tabs)/rewards' as any)}
                 activeOpacity={0.9}
               >
                 <LinearGradient
