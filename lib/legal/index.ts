@@ -62,7 +62,7 @@ You are responsible for maintaining the confidentiality of your account credenti
 Palletium operates on an identity-verified payment model:
 
 Verified Artists (ID verification + $49.99/year):
-• First unique listen of a track: $1.00 payment to artist
+• First unique listen from a subscribed listener: $1.00 payment to artist
 • Subsequent listens: $0.01 per play
 • Unlimited uploads, immediate discovery
 

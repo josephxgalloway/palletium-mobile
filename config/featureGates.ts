@@ -27,8 +27,9 @@ export const FEATURE_GATES: FeatureGate[] = [
   // PREVIEW AT 100 USERS - Social Features
   { key: 'leaderboards', name: 'Impact', requiredUsers: 100, status: 'preview' },
   { key: 'community_feed', name: 'Community Feed', requiredUsers: 100, status: 'preview' },
-  { key: 'quests', name: 'Goals', requiredUsers: 100, status: 'preview' },
+  { key: 'quests', name: 'Goals', requiredUsers: 500, status: 'preview' },
   { key: 'badges', name: 'Milestones', requiredUsers: 100, status: 'preview' },
+  { key: 'xp_display', name: 'XP Display', requiredUsers: 500, status: 'preview' },
 
   // UNLOCK THRESHOLDS - Paid Features Requiring Network
   {
@@ -54,7 +55,7 @@ export const FEATURE_GATES: FeatureGate[] = [
   {
     key: 'xp_boosters',
     name: 'XP Boosters',
-    requiredUsers: 100,
+    requiredUsers: 500,
     additionalConditions: 'Impact feature active',
     status: 'preview'
   },
@@ -86,7 +87,7 @@ export const UNLOCK_THRESHOLDS = {
   syncLicensing: 500,         // quality tracks + buyer conversations
   promotions: 1000,           // MAU
   seasonPass: 500,            // active users
-  xpBoosters: 100,            // users (requires leaderboards)
+  xpBoosters: 500,            // users (requires leaderboards)
   marketplace: 100,           // artists
   artistLevels: 100,          // artists (tied to marketplace/services)
 };

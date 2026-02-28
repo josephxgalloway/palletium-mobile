@@ -426,7 +426,7 @@ export default function JourneyScreen() {
                   {entry.name} {entry.is_current_user && '(You)'}
                 </Text>
                 <Text style={styles.leaderboardStats}>
-                  {formatNumber(entry.total_xp)} XP • {entry.badge_count} badges
+                  {formatNumber(entry.total_xp)} XP • {entry.badge_count} milestones
                 </Text>
               </View>
             </View>

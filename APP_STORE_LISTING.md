@@ -7,7 +7,7 @@ Palletium - Music That Pays
 Stream music. Earn rewards.
 
 ## Promotional Text (170 chars - can update without review)
-Discover amazing independent artists and earn rewards for every new song you find. Verified artists earn $1 per first listen - 200× more than other platforms.
+Discover amazing independent artists and earn rewards for every new song you find. Verified artists earn $1 per first listen from subscribed listeners - 200× more than other platforms.
 
 ## Description (4000 chars max)
 
@@ -23,7 +23,7 @@ Palletium is the music streaming platform that pays artists fairly and rewards y
 
 **FOR ARTISTS**
 
-• Verified artists earn $1.00 per first listen (200× the industry average)
+• Verified artists earn $1.00 per first listen from subscribed listeners (200× the industry average)
 • Earn $0.01 for every repeat listen
 • Get verified for $49.99/year to unlock full rates and unlimited uploads
 • Access detailed analytics on your audience
