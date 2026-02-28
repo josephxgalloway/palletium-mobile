@@ -1,3 +1,4 @@
+import { RoleGate } from '@/components/RoleGate';
 import { theme } from '@/constants/theme';
 import {
   getFinancialMetrics,
@@ -19,7 +20,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function AdminPaymentsTab() {
+// Gate: admin-only — no data hooks fire before RoleGate resolves
+export default function AdminPaymentsPage() {
+  return (
+    <RoleGate allow={['admin']}>
+      <AdminPaymentsTab />
+    </RoleGate>
+  );
+}
+
+function AdminPaymentsTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [financial, setFinancial] = useState<FinancialMetrics | null>(null);

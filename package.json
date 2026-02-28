@@ -8,7 +8,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "postinstall": "patch-package",
-    "guard:no-iap": "bash scripts/check-forbidden-imports.sh"
+    "guard:no-iap": "bash scripts/check-forbidden-imports.sh",
+    "guard:no-financial-math": "bash scripts/check-no-financial-math.sh",
+    "guard": "npm run guard:no-iap && npm run guard:no-financial-math"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

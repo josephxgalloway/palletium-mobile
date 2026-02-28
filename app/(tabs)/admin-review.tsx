@@ -1,3 +1,4 @@
+import { RoleGate } from '@/components/RoleGate';
 import { theme } from '@/constants/theme';
 import {
   getReviewMetrics,
@@ -24,7 +25,16 @@ import Toast from 'react-native-toast-message';
 
 type FilterStatus = 'pending' | 'approved' | 'rejected';
 
-export default function AdminReviewTab() {
+// Gate: admin-only — no data hooks fire before RoleGate resolves
+export default function AdminReviewPage() {
+  return (
+    <RoleGate allow={['admin']}>
+      <AdminReviewTab />
+    </RoleGate>
+  );
+}
+
+function AdminReviewTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [metrics, setMetrics] = useState<ReviewMetrics | null>(null);

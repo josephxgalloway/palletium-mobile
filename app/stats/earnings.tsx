@@ -1,3 +1,4 @@
+import { RoleGate } from '@/components/RoleGate';
 import { theme } from '@/constants/theme';
 import api from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -14,6 +15,15 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+// Gate: artist-only — no hooks fire before RoleGate resolves
+export default function ArtistEarningsPage() {
+    return (
+        <RoleGate allow={['artist']}>
+            <ArtistEarningsScreen />
+        </RoleGate>
+    );
+}
 
 interface EarningsSummary {
     total_earnings: number;
@@ -37,7 +47,7 @@ interface EarningsTransaction {
     created_at: string;
 }
 
-export default function ArtistEarningsScreen() {
+function ArtistEarningsScreen() {
     const { user } = useAuthStore();
     const [summary, setSummary] = useState<EarningsSummary | null>(null);
     const [transactions, setTransactions] = useState<EarningsTransaction[]>([]);

@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, isLoading, user } = useAuthStore();
-  const { isAdmin } = getUserEntitlements(user);
+  const { isAdmin, isArtist } = getUserEntitlements(user);
 
   // Redirect to login if not authenticated
   if (!isLoading && !isAuthenticated) {
@@ -21,9 +21,13 @@ export default function TabLayout() {
   const bottomPadding = Math.max(insets.bottom, 8);
   const tabBarHeight = 56 + bottomPadding;
 
-  // Conditional href: null hides from tab bar, undefined shows it
+  // Role-aware tab visibility: null hides from tab bar, undefined shows it
   const showForUsers = isAdmin ? null : undefined;
   const showForAdmins = isAdmin ? undefined : null;
+  // Studio: artist-only (hidden from listeners and admins)
+  const showForArtists = (isArtist && !isAdmin) ? undefined : null;
+  // Rewards: listener-only (hidden from artists; visible for listeners including hybrid)
+  const showForListeners = (!isArtist && !isAdmin) ? undefined : null;
 
   return (
     <LegalGuard>
@@ -93,7 +97,7 @@ export default function TabLayout() {
         name="rewards"
         options={{
           title: 'Rewards',
-          href: showForUsers,
+          href: showForListeners,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="gift" size={size} color={color} />
           ),
@@ -103,7 +107,7 @@ export default function TabLayout() {
         name="studio"
         options={{
           title: 'Studio',
-          href: showForUsers,
+          href: showForArtists,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="mic" size={size} color={color} />
           ),

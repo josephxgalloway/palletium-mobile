@@ -239,6 +239,14 @@ export default function UploadScreen() {
     setUploadProgress(0);
 
     try {
+      // Diagnostics: log file metadata before upload
+      console.log('[UPLOAD] File info', {
+        name: audioFile.name,
+        size: audioFile.size,
+        mimeType: audioFile.mimeType,
+        uriScheme: audioFile.uri?.split(':')[0],
+      });
+
       const formData = new FormData();
       formData.append('audio', {
         uri: audioFile.uri,
@@ -364,10 +372,24 @@ export default function UploadScreen() {
   };
 
   const uploadWithProgress = (formData: FormData, endpoint: string): Promise<any> => {
+    const url = `${api.defaults.baseURL}${endpoint}`;
+    const startTime = Date.now();
+
     return new Promise(async (resolve, reject) => {
       try {
         const token = await SecureStore.getItemAsync('accessToken');
+
+        // Diagnostics: log upload attempt
+        console.log('[UPLOAD] Start', {
+          url,
+          hasToken: !!token,
+          formDataKeys: (formData as any)._parts?.map((p: any[]) => p[0]) ?? 'unknown',
+        });
+
         const xhr = new XMLHttpRequest();
+
+        // 5-minute timeout for large file uploads (50MB WAV on LTE)
+        xhr.timeout = 300_000;
 
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
@@ -377,21 +399,40 @@ export default function UploadScreen() {
         };
 
         xhr.onload = () => {
+          const elapsed = Date.now() - startTime;
+          console.log('[UPLOAD] Response', {
+            status: xhr.status,
+            elapsed: `${elapsed}ms`,
+            bodySnippet: xhr.responseText?.slice(0, 200),
+          });
+
           if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText));
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch {
+              resolve({ ok: true });
+            }
           } else {
-            // Parse structured error from backend
             try {
               const errorData = JSON.parse(xhr.responseText);
-              reject(new Error(errorData.message || errorData.error || 'Upload failed'));
+              reject(new Error(errorData.message || errorData.error || `Upload failed (${xhr.status})`));
             } catch {
-              reject(new Error('Upload failed'));
+              reject(new Error(`Upload failed (HTTP ${xhr.status})`));
             }
           }
         };
 
-        xhr.onerror = () => reject(new Error('Network error'));
-        xhr.open('POST', `${api.defaults.baseURL}${endpoint}`);
+        xhr.onerror = () => {
+          console.log('[UPLOAD] Network error', { elapsed: `${Date.now() - startTime}ms` });
+          reject(new Error('Network error — check your connection and try again'));
+        };
+
+        xhr.ontimeout = () => {
+          console.log('[UPLOAD] Timeout after 5 minutes');
+          reject(new Error('Upload timed out — try a smaller file or a faster connection'));
+        };
+
+        xhr.open('POST', url);
 
         if (token) {
           xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -399,6 +440,7 @@ export default function UploadScreen() {
 
         xhr.send(formData);
       } catch (err) {
+        console.log('[UPLOAD] Exception', err);
         reject(err);
       }
     });
@@ -610,14 +652,16 @@ export default function UploadScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.typeCard}
-                    onPress={() => selectUploadType('album')}
+                    style={[styles.typeCard, { opacity: 0.5 }]}
+                    onPress={() => Linking.openURL('https://palletium.com/upload')}
                   >
                     <View style={styles.typeIconContainer}>
-                      <Ionicons name="albums" size={32} color={theme.colors.accent} />
+                      <Ionicons name="albums" size={32} color={theme.colors.textMuted} />
                     </View>
                     <Text style={styles.typeTitle}>Album / EP</Text>
-                    <Text style={styles.typeDescription}>Upload multiple tracks together</Text>
+                    <Text style={[styles.typeDescription, { color: theme.colors.textMuted }]}>
+                      Use web platform for albums
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}

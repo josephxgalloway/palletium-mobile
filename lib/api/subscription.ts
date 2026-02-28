@@ -217,13 +217,8 @@ export const resumeSubscription = async (): Promise<{ success: boolean }> => {
   return response.data;
 };
 
-/**
- * Start free trial
- */
-export const startFreeTrial = async (): Promise<{ success: boolean; trialEndDate: string }> => {
-  const response = await api.post('/subscriptions/trial');
-  return response.data;
-};
+// startFreeTrial removed — trial initiation must go through web checkout
+// (Reader App posture: no monetization writes from mobile)
 
 export default {
   SUBSCRIPTION_PLANS,
@@ -232,5 +227,4 @@ export default {
   getCustomerPortal,
   cancelSubscription,
   resumeSubscription,
-  startFreeTrial,
 };

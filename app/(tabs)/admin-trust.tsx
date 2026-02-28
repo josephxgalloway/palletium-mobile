@@ -1,3 +1,4 @@
+import { RoleGate } from '@/components/RoleGate';
 import { theme } from '@/constants/theme';
 import {
   getFraudReports,
@@ -19,7 +20,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function AdminTrustTab() {
+// Gate: admin-only — no data hooks fire before RoleGate resolves
+export default function AdminTrustPage() {
+  return (
+    <RoleGate allow={['admin']}>
+      <AdminTrustTab />
+    </RoleGate>
+  );
+}
+
+function AdminTrustTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fraud, setFraud] = useState<FraudReport | null>(null);

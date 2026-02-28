@@ -1,3 +1,4 @@
+import { RoleGate } from '@/components/RoleGate';
 import { theme } from '@/constants/theme';
 import { getArtistTracks } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -18,7 +19,16 @@ interface Track {
     created_at: string;
 }
 
-export default function ArtistStudioScreen() {
+// Gate: artist-only — no hooks fire before RoleGate resolves
+export default function ArtistStudioPage() {
+    return (
+        <RoleGate allow={['artist']}>
+            <ArtistStudioScreen />
+        </RoleGate>
+    );
+}
+
+function ArtistStudioScreen() {
     const { user } = useAuthStore();
     const [tracks, setTracks] = useState<Track[]>([]);
     const [loading, setLoading] = useState(true);

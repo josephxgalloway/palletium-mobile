@@ -1,3 +1,4 @@
+import { RoleGate } from '@/components/RoleGate';
 import { theme } from '@/constants/theme';
 import { useTrackEditStore } from '@/lib/store/trackEditStore';
 import { useAuthStore } from '@/lib/store/authStore';
@@ -27,7 +28,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import * as Haptics from 'expo-haptics';
 
-export default function TrackEditScreen() {
+// Gate: artist-only — no hooks fire before RoleGate resolves
+export default function TrackEditPage() {
+  return (
+    <RoleGate allow={['artist']}>
+      <TrackEditScreen />
+    </RoleGate>
+  );
+}
+
+function TrackEditScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
 

@@ -1,3 +1,4 @@
+import { RoleGate } from '@/components/RoleGate';
 import { theme } from '@/constants/theme';
 import { getAnalytics, getSystemHealth, getReviewMetrics } from '@/lib/api/admin.service';
 import type { AdminAnalytics, SystemHealth, ReviewMetrics } from '@/lib/api/admin.service';
@@ -16,7 +17,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function AdminDashboardTab() {
+// Gate: admin-only — no data hooks fire before RoleGate resolves
+export default function AdminDashboardPage() {
+  return (
+    <RoleGate allow={['admin']}>
+      <AdminDashboardTab />
+    </RoleGate>
+  );
+}
+
+function AdminDashboardTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);

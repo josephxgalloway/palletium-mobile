@@ -22,7 +22,7 @@ if (__DEV__) {
 
 export const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000,
+  timeout: 30_000, // 30s — covers profile image upload + slow LTE
   headers: {
     'Content-Type': 'application/json',
   },
