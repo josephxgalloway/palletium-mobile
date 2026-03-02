@@ -2,6 +2,11 @@ import { theme } from '@/constants/theme';
 import api from '@/lib/api/client';
 import { getUserEntitlements } from '@/lib/entitlements';
 import { useAuthStore } from '@/lib/store/authStore';
+import {
+  directUploadTrackAudio,
+  getPhaseLabel,
+  type UploadPhase,
+} from '@/lib/upload/directUpload';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as SecureStore from 'expo-secure-store';
@@ -72,6 +77,7 @@ export default function UploadScreen() {
   const [step, setStep] = useState<Step>('type');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadPhase, setUploadPhase] = useState<UploadPhase | null>(null);
   const [currentUploadTrack, setCurrentUploadTrack] = useState(0);
   const [totalUploadTracks, setTotalUploadTracks] = useState(1);
 
@@ -237,6 +243,7 @@ export default function UploadScreen() {
     setStep('uploading');
     setUploading(true);
     setUploadProgress(0);
+    setUploadPhase(null);
 
     try {
       // Diagnostics: log file metadata before upload
@@ -245,35 +252,74 @@ export default function UploadScreen() {
         size: audioFile.size,
         mimeType: audioFile.mimeType,
         uriScheme: audioFile.uri?.split(':')[0],
+        pipeline: process.env.EXPO_PUBLIC_DIRECT_UPLOADS === 'true' ? 'direct' : 'legacy',
       });
 
-      const formData = new FormData();
-      formData.append('audio', {
-        uri: audioFile.uri,
-        type: audioFile.mimeType || 'audio/wav',
-        name: audioFile.name || 'track.wav',
-      } as any);
+      // ── Direct-to-S3 pipeline (feature-flagged) ──
+      if (process.env.EXPO_PUBLIC_DIRECT_UPLOADS === 'true') {
+        await directUploadTrackAudio(
+          {
+            fileUri: audioFile.uri,
+            filename: audioFile.name || 'track.wav',
+            mimeType: audioFile.mimeType || 'audio/wav',
+            byteSize: audioFile.size || 0,
+            userId: user!.id,
+            title,
+            genre,
+            releaseDate,
+            contentType,
+            generateIsrc: true,
+            rightsAcknowledgments: {
+              acknowledgeRights,
+              acknowledgeIndemnification,
+              contentType,
+            },
+            artworkUri: artwork.uri,
+          },
+          (phase, progress) => {
+            setUploadPhase(phase);
+            // Map 4 phases to 0–100 overall progress
+            const phaseWeights: Record<UploadPhase, [number, number]> = {
+              resuming: [0, 3],
+              preparing: [3, 5],
+              uploading: [5, 85],
+              finalizing: [85, 95],
+              creating: [95, 100],
+            };
+            const [start, end] = phaseWeights[phase];
+            setUploadProgress(Math.round(start + (progress / 100) * (end - start)));
+          },
+        );
+      } else {
+        // ── Legacy FormData/XHR pipeline ──
+        const formData = new FormData();
+        formData.append('audio', {
+          uri: audioFile.uri,
+          type: audioFile.mimeType || 'audio/wav',
+          name: audioFile.name || 'track.wav',
+        } as any);
 
-      const artworkFilename = artwork.uri.split('/').pop() || 'artwork.jpg';
-      const artworkType = artworkFilename.endsWith('.png') ? 'image/png' : 'image/jpeg';
-      formData.append('artwork', {
-        uri: artwork.uri,
-        type: artworkType,
-        name: artworkFilename,
-      } as any);
+        const artworkFilename = artwork.uri.split('/').pop() || 'artwork.jpg';
+        const artworkType = artworkFilename.endsWith('.png') ? 'image/png' : 'image/jpeg';
+        formData.append('artwork', {
+          uri: artwork.uri,
+          type: artworkType,
+          name: artworkFilename,
+        } as any);
 
-      formData.append('title', title);
-      formData.append('genre', genre);
-      formData.append('releaseDate', releaseDate);
-      formData.append('contentType', contentType);
-      formData.append('generateIsrc', 'true');
-      formData.append('rightsAcknowledgments', JSON.stringify({
-        acknowledgeRights,
-        acknowledgeIndemnification,
-        contentType,
-      }));
+        formData.append('title', title);
+        formData.append('genre', genre);
+        formData.append('releaseDate', releaseDate);
+        formData.append('contentType', contentType);
+        formData.append('generateIsrc', 'true');
+        formData.append('rightsAcknowledgments', JSON.stringify({
+          acknowledgeRights,
+          acknowledgeIndemnification,
+          contentType,
+        }));
 
-      await uploadWithProgress(formData, '/tracks/upload');
+        await uploadWithProgress(formData, '/tracks/upload');
+      }
 
       Toast.show({
         type: 'success',
@@ -292,6 +338,7 @@ export default function UploadScreen() {
       setStep('rights');
     } finally {
       setUploading(false);
+      setUploadPhase(null);
     }
   };
 
@@ -542,7 +589,9 @@ export default function UploadScreen() {
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
           </View>
-          <Text style={styles.uploadingHint}>Please wait, this may take a moment...</Text>
+          <Text style={styles.uploadingHint}>
+            {uploadPhase ? getPhaseLabel(uploadPhase) : 'Please wait, this may take a moment...'}
+          </Text>
         </View>
       </SafeAreaView>
     );
