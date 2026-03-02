@@ -70,6 +70,15 @@ export interface UploadProgressCallback {
   (phase: UploadPhase, progress: number): void;
 }
 
+/**
+ * Optional debug event callback for on-screen instrumentation.
+ * Emits human-readable status strings at key pipeline milestones.
+ * MUST NOT include auth tokens or full presigned URLs.
+ */
+export interface DebugEventCallback {
+  (msg: string): void;
+}
+
 // ── Configuration ────────────────────────────────────────────────────────────
 
 const MAX_PUT_RETRIES = 3;
@@ -272,6 +281,7 @@ async function initUpload(
 export async function directUploadTrackAudio(
   input: DirectUploadInput,
   onProgress?: UploadProgressCallback,
+  onDebugEvent?: DebugEventCallback,
 ): Promise<DirectUploadResult> {
   // ── Concurrency guard ──────────────────────────────────────────────────
   if (uploadInFlight) {
@@ -280,7 +290,7 @@ export async function directUploadTrackAudio(
   uploadInFlight = true;
 
   try {
-    return await executeUploadPipeline(input, onProgress);
+    return await executeUploadPipeline(input, onProgress, onDebugEvent);
   } finally {
     uploadInFlight = false;
   }
@@ -315,6 +325,7 @@ export function isUploadInProgress(): boolean {
 async function executeUploadPipeline(
   input: DirectUploadInput,
   onProgress?: UploadProgressCallback,
+  onDebugEvent?: DebugEventCallback,
 ): Promise<DirectUploadResult> {
   const idempotencyKey = await stableIdempotencyKey(
     input.userId,
@@ -323,46 +334,59 @@ async function executeUploadPipeline(
   );
   log('Pipeline start — key:', idempotencyKey.substring(0, 20) + '…');
 
+  const dbg = onDebugEvent;
+  dbg?.(`Pipeline start: ${input.filename} (${(input.byteSize / 1048576).toFixed(1)} MB)`);
+
   let assetId: string;
   let presignedUrl: string;
   let skipPut = false;
 
   // ── Resume check ───────────────────────────────────────────────────────
+  dbg?.('Resume check: loading pending upload...');
   const pending = await loadPendingUpload();
 
   if (pending && pending.idempotencyKey === idempotencyKey) {
     onProgress?.('resuming', 0);
     log('Found pending upload — assetId:', pending.assetId);
+    dbg?.(`Found pending upload: asset=${pending.assetId.substring(0, 12)}...`);
 
     try {
       const statusRes = await api.get(`/uploads/${pending.assetId}`);
       const status: string = statusRes.data.asset?.status ?? statusRes.data.status;
       log('Pending asset status:', status);
+      dbg?.(`Pending asset status: ${status}`);
 
       if (status === 'UPLOADED') {
         assetId = pending.assetId;
         presignedUrl = '';
         skipPut = true;
         log('Asset already UPLOADED — skipping to track creation');
+        dbg?.('Asset UPLOADED — skipping to track creation');
       } else if (status === 'INITIATED' || status === 'UPLOADING') {
         assetId = pending.assetId;
         presignedUrl = '';
         log('Asset', status, '— will re-init for fresh presigned URL');
+        dbg?.(`Asset ${status} — will re-init`);
       } else {
         log('Asset in terminal state:', status, '— starting fresh');
+        dbg?.(`Asset terminal (${status}) — starting fresh`);
         await clearPendingUpload();
       }
     } catch {
       log('Status check failed — starting fresh');
+      dbg?.('Resume check failed — starting fresh');
       await clearPendingUpload();
     }
 
     onProgress?.('resuming', 100);
+  } else {
+    dbg?.('No pending upload found — fresh start');
   }
 
   // ── Phase A: Init ──────────────────────────────────────────────────────
   if (!skipPut) {
     onProgress?.('preparing', 0);
+    dbg?.('Phase A: Init — requesting presigned URL...');
 
     try {
       const result = await initUpload(input, idempotencyKey);
@@ -374,7 +398,9 @@ async function executeUploadPipeline(
         idempotencyKey,
         initiatedAt: Date.now(),
       });
+      dbg?.(`Init success: asset=${assetId.substring(0, 12)}...`);
     } catch (error) {
+      dbg?.(`Init FAILED: ${extractErrorMessage(error, 'unknown')}`);
       throw new Error(
         extractErrorMessage(error, 'Failed to prepare upload — please try again'),
       );
@@ -384,12 +410,15 @@ async function executeUploadPipeline(
 
     // ── Phase B: Upload to S3 (with retry + TTL re-init) ──────────────
     onProgress?.('uploading', 0);
+    dbg?.('Phase B: PUT to S3 starting...');
 
     let uploadSucceeded = false;
     let lastUploadError: unknown;
+    let lastReportedMilestone = 0;
 
     for (let attempt = 0; attempt <= MAX_PUT_RETRIES; attempt++) {
       log(`PUT attempt ${attempt + 1}/${MAX_PUT_RETRIES + 1}`);
+      dbg?.(`PUT attempt ${attempt + 1}/${MAX_PUT_RETRIES + 1}`);
 
       try {
         const task = createUploadTask(
@@ -408,6 +437,12 @@ async function executeUploadPipeline(
                 (data.totalBytesSent / data.totalBytesExpectedToSend) * 100,
               );
               onProgress?.('uploading', pct);
+              // Report progress at 25% milestones
+              const milestone = Math.floor(pct / 25) * 25;
+              if (milestone > lastReportedMilestone && milestone > 0) {
+                lastReportedMilestone = milestone;
+                dbg?.(`PUT progress: ${pct}% (${(data.totalBytesSent / 1048576).toFixed(1)} MB sent)`);
+              }
             }
           },
         );
@@ -417,12 +452,15 @@ async function executeUploadPipeline(
         if (!uploadResult) {
           lastUploadError = new Error('Upload task returned no result');
           log('PUT returned null/undefined result');
+          dbg?.('PUT returned no result');
         } else if (uploadResult.status >= 200 && uploadResult.status < 300) {
           uploadSucceeded = true;
           log('PUT succeeded — HTTP', uploadResult.status);
+          dbg?.(`PUT success: HTTP ${uploadResult.status}`);
           break;
         } else if (isFatal403(uploadResult.status, uploadResult.body)) {
           log('PUT got fatal 403 —', sanitizeS3Body(uploadResult.body));
+          dbg?.(`PUT fatal 403 — re-init for fresh URL`);
 
           // TTL awareness: re-init with same idempotency key for a fresh URL
           try {
@@ -436,12 +474,14 @@ async function executeUploadPipeline(
               idempotencyKey,
               initiatedAt: Date.now(),
             });
+            dbg?.('Re-init success — retrying PUT');
 
             // Don't count this as a retry — continue loop with fresh URL
             continue;
           } catch (reinitError) {
             lastUploadError = reinitError;
             log('Re-init failed:', extractErrorMessage(reinitError, 'unknown'));
+            dbg?.(`Re-init FAILED: ${extractErrorMessage(reinitError, 'unknown')}`);
             break;
           }
         } else {
@@ -449,10 +489,12 @@ async function executeUploadPipeline(
             `S3 upload returned HTTP ${uploadResult.status}`,
           );
           log('PUT failed — HTTP', uploadResult.status, sanitizeS3Body(uploadResult.body));
+          dbg?.(`PUT failed: HTTP ${uploadResult.status}`);
         }
       } catch (error) {
         lastUploadError = error;
         log('PUT threw:', extractErrorMessage(error, 'unknown'));
+        dbg?.(`PUT exception: ${extractErrorMessage(error, 'unknown')}`);
       }
 
       // Retry with exponential backoff (skip delay after last attempt)
@@ -465,6 +507,7 @@ async function executeUploadPipeline(
 
     if (!uploadSucceeded) {
       log('All PUT attempts exhausted — aborting asset');
+      dbg?.('All PUT attempts exhausted — aborting');
       try {
         await api.post(`/uploads/${assetId!}/abort`);
       } catch {
@@ -484,11 +527,14 @@ async function executeUploadPipeline(
     // ── Phase C: Finalize ────────────────────────────────────────────────
     onProgress?.('finalizing', 0);
     log('Finalize → assetId:', assetId!);
+    dbg?.('Phase C: Finalize — verifying upload...');
 
     try {
       await api.post(`/uploads/${assetId!}/finalize`);
       log('Finalize ← success');
+      dbg?.('Finalize success');
     } catch (error) {
+      dbg?.(`Finalize FAILED: ${extractErrorMessage(error, 'unknown')}`);
       // Don't clear pending — finalize can be retried on the same asset
       throw new Error(
         extractErrorMessage(error, 'Upload verification failed — please try again'),
@@ -501,6 +547,7 @@ async function executeUploadPipeline(
   // ── Phase D: Create track ──────────────────────────────────────────────
   onProgress?.('creating', 0);
   log('Creating track from asset:', assetId!);
+  dbg?.('Phase D: Create track — sending metadata...');
 
   try {
     const formData = new FormData();
@@ -549,6 +596,7 @@ async function executeUploadPipeline(
       trackRes.data.track?.id ?? trackRes.data.id ?? trackRes.data.trackId;
 
     if (!trackId) {
+      dbg?.('Track created but no ID in response');
       throw new Error('Track created but no ID returned');
     }
 
@@ -556,6 +604,7 @@ async function executeUploadPipeline(
 
     onProgress?.('creating', 100);
     log('Track created — id:', trackId);
+    dbg?.(`Track created: id=${trackId}`);
 
     return {
       trackId,
@@ -564,12 +613,14 @@ async function executeUploadPipeline(
   } catch (error) {
     const status = extractHttpStatus(error);
     log('Track creation failed — HTTP', status ?? 'network');
+    dbg?.(`Track creation FAILED: HTTP ${status ?? 'network'} — ${extractErrorMessage(error, 'unknown')}`);
 
     if (status !== null && NON_RETRYABLE_TRACK_STATUS.has(status)) {
       // Non-retryable: validation error, auth issue, or duplicate.
       // Clear pending so the user isn't stuck in a dead retry loop.
       // The audio is already in S3 — they can fix metadata and re-create.
       log('Non-retryable', status, '— clearing pending upload');
+      dbg?.(`Non-retryable ${status} — clearing pending`);
       await clearPendingUpload();
       throw new Error(
         extractErrorMessage(error, 'Track creation failed — please check your track details and try again'),

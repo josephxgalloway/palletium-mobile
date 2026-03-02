@@ -25,7 +25,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.palletium.com",
-        "EXPO_PUBLIC_DIRECT_UPLOADS": "true"
+        "EXPO_PUBLIC_DIRECT_UPLOADS": "true",
+        "EXPO_PUBLIC_DEBUG_UPLOAD_UI": "true"
       }
     },
     "production": {

@@ -12,7 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as SecureStore from 'expo-secure-store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -69,6 +69,9 @@ interface AlbumTrack extends AudioFile {
   trackNumber: number;
 }
 
+const DEBUG_UPLOAD = process.env.EXPO_PUBLIC_DEBUG_UPLOAD_UI === 'true';
+const MAX_DEBUG_EVENTS = 10;
+
 export default function UploadScreen() {
   const { user } = useAuthStore();
 
@@ -80,6 +83,15 @@ export default function UploadScreen() {
   const [uploadPhase, setUploadPhase] = useState<UploadPhase | null>(null);
   const [currentUploadTrack, setCurrentUploadTrack] = useState(0);
   const [totalUploadTracks, setTotalUploadTracks] = useState(1);
+
+  // Debug panel state (preview builds only)
+  const [debugEvents, setDebugEvents] = useState<string[]>([]);
+  const debugPhaseRef = useRef<string>('idle');
+
+  const pushDebugEvent = useCallback((msg: string) => {
+    const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setDebugEvents(prev => [`[${ts}] ${msg}`, ...prev].slice(0, MAX_DEBUG_EVENTS));
+  }, []);
 
   // Single track state
   const [audioFile, setAudioFile] = useState<AudioFile | null>(null);
@@ -235,7 +247,26 @@ export default function UploadScreen() {
   };
 
   const handleSingleUpload = async () => {
-    if (!audioFile || !artwork || !title || !genre) {
+    if (DEBUG_UPLOAD) Alert.alert('Upload', 'Pressed');
+
+    if (uploading) {
+      if (DEBUG_UPLOAD) Alert.alert('Blocked', 'Upload already in progress');
+      return;
+    }
+
+    if (!user) {
+      if (DEBUG_UPLOAD) Alert.alert('Blocked', 'Not authenticated');
+      return;
+    }
+
+    if (!audioFile) {
+      if (DEBUG_UPLOAD) Alert.alert('Blocked', 'No file selected / picker cancelled');
+      Toast.show({ type: 'error', text1: 'Please complete all required fields' });
+      return;
+    }
+
+    if (!artwork || !title || !genre) {
+      if (DEBUG_UPLOAD) Alert.alert('Blocked', 'Missing required fields (artwork/title/genre)');
       Toast.show({ type: 'error', text1: 'Please complete all required fields' });
       return;
     }
@@ -244,16 +275,23 @@ export default function UploadScreen() {
     setUploading(true);
     setUploadProgress(0);
     setUploadPhase(null);
+    if (DEBUG_UPLOAD) {
+      setDebugEvents([]);
+      debugPhaseRef.current = 'starting';
+      pushDebugEvent(`Upload starting: ${audioFile.name} (${((audioFile.size || 0) / 1048576).toFixed(1)} MB)`);
+    }
 
     try {
       // Diagnostics: log file metadata before upload
+      const pipeline = process.env.EXPO_PUBLIC_DIRECT_UPLOADS === 'true' ? 'direct' : 'legacy';
       console.log('[UPLOAD] File info', {
         name: audioFile.name,
         size: audioFile.size,
         mimeType: audioFile.mimeType,
         uriScheme: audioFile.uri?.split(':')[0],
-        pipeline: process.env.EXPO_PUBLIC_DIRECT_UPLOADS === 'true' ? 'direct' : 'legacy',
+        pipeline,
       });
+      if (DEBUG_UPLOAD) pushDebugEvent(`Pipeline: ${pipeline}`);
 
       // ── Direct-to-S3 pipeline (feature-flagged) ──
       if (process.env.EXPO_PUBLIC_DIRECT_UPLOADS === 'true') {
@@ -263,7 +301,7 @@ export default function UploadScreen() {
             filename: audioFile.name || 'track.wav',
             mimeType: audioFile.mimeType || 'audio/wav',
             byteSize: audioFile.size || 0,
-            userId: user!.id,
+            userId: user.id,
             title,
             genre,
             releaseDate,
@@ -278,6 +316,7 @@ export default function UploadScreen() {
           },
           (phase, progress) => {
             setUploadPhase(phase);
+            debugPhaseRef.current = phase;
             // Map 4 phases to 0–100 overall progress
             const phaseWeights: Record<UploadPhase, [number, number]> = {
               resuming: [0, 3],
@@ -289,9 +328,11 @@ export default function UploadScreen() {
             const [start, end] = phaseWeights[phase];
             setUploadProgress(Math.round(start + (progress / 100) * (end - start)));
           },
+          DEBUG_UPLOAD ? pushDebugEvent : undefined,
         );
       } else {
         // ── Legacy FormData/XHR pipeline ──
+        if (DEBUG_UPLOAD) pushDebugEvent('Using legacy XHR pipeline');
         const formData = new FormData();
         formData.append('audio', {
           uri: audioFile.uri,
@@ -321,6 +362,8 @@ export default function UploadScreen() {
         await uploadWithProgress(formData, '/tracks/upload');
       }
 
+      if (DEBUG_UPLOAD) pushDebugEvent('Upload complete!');
+
       Toast.show({
         type: 'success',
         text1: 'Track uploaded!',
@@ -330,6 +373,11 @@ export default function UploadScreen() {
       router.replace('/(tabs)/studio');
     } catch (error: any) {
       console.error('Upload error:', error);
+      const safeMessage = String(error?.message || 'Unknown error').substring(0, 200);
+      if (DEBUG_UPLOAD) {
+        pushDebugEvent(`ERROR: ${safeMessage}`);
+        Alert.alert('Upload error', safeMessage);
+      }
       Toast.show({
         type: 'error',
         text1: 'Upload failed',
@@ -339,6 +387,7 @@ export default function UploadScreen() {
     } finally {
       setUploading(false);
       setUploadPhase(null);
+      debugPhaseRef.current = 'idle';
     }
   };
 
@@ -592,6 +641,21 @@ export default function UploadScreen() {
           <Text style={styles.uploadingHint}>
             {uploadPhase ? getPhaseLabel(uploadPhase) : 'Please wait, this may take a moment...'}
           </Text>
+
+          {DEBUG_UPLOAD && debugEvents.length > 0 && (
+            <View style={styles.debugPanel}>
+              <Text style={styles.debugTitle}>Debug Log ({debugPhaseRef.current})</Text>
+              <ScrollView style={styles.debugScroll} nestedScrollEnabled>
+                {debugEvents.map((evt, i) => (
+                  <Text key={i} style={[
+                    styles.debugLine,
+                    evt.includes('FAILED') || evt.includes('ERROR') ? styles.debugLineError : null,
+                    evt.includes('success') || evt.includes('complete') ? styles.debugLineSuccess : null,
+                  ]}>{evt}</Text>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -1657,5 +1721,37 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     color: '#fff',
     fontWeight: '600',
+  },
+  // Debug panel (preview builds only)
+  debugPanel: {
+    marginTop: 20,
+    width: '100%',
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    borderRadius: 8,
+    padding: 10,
+    maxHeight: 200,
+  },
+  debugTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#10b981',
+    marginBottom: 6,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  debugScroll: {
+    maxHeight: 160,
+  },
+  debugLine: {
+    fontSize: 10,
+    color: '#d1d5db',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 15,
+    marginBottom: 2,
+  },
+  debugLineError: {
+    color: '#ef4444',
+  },
+  debugLineSuccess: {
+    color: '#10b981',
   },
 });
