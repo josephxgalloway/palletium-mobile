@@ -99,6 +99,26 @@ export default function SubscriptionScreen() {
   };
 
   const handleCheckout = async () => {
+    // CONTAINMENT: Artist verification requires Stripe Elements (card entry) — only
+    // available on web. Mobile cannot securely embed Stripe Elements. This is a
+    // capability gap, not the intended end state.
+    // TODO: Prefer a dedicated web route e.g. /settings/billing?intent=artist_verification
+    // once the web platform supports intent-based deep links. Current URL uses hash
+    // navigation which is fragile.
+    if (isArtist) {
+      setCheckoutLoading(true);
+      try {
+        await WebBrowser.openAuthSessionAsync(
+          'https://palletium.com/settings?tab=billing#verification',
+          'palletium://settings/subscription'
+        );
+        await fetchStatus();
+      } finally {
+        setCheckoutLoading(false);
+      }
+      return;
+    }
+
     setCheckoutLoading(true);
     try {
       const planId = getPlanId();
@@ -460,7 +480,7 @@ export default function SubscriptionScreen() {
                 <>
                   <Text style={styles.ctaText}>
                     {isArtist
-                      ? 'Get Verified'
+                      ? 'Get Verified on Web'
                       : `Get ${selectedPlan === 'premium' ? 'Premium' : 'Basic'}`}
                   </Text>
                   <Text style={styles.ctaPrice}>

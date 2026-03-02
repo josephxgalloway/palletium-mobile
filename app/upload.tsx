@@ -600,8 +600,10 @@ export default function UploadScreen() {
     setUploadType(type);
     if (type === 'single') {
       setStep('audio');
+      if (DEBUG_UPLOAD) Alert.alert('Step Change', `step set to "audio" (was "type")`);
     } else {
       setStep('tracks');
+      if (DEBUG_UPLOAD) Alert.alert('Step Change', `step set to "tracks" (was "type")`);
     }
   };
 
@@ -766,18 +768,18 @@ export default function UploadScreen() {
                     <Text style={styles.typeDescription}>Upload one song at a time</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
+                  <View
                     style={[styles.typeCard, { opacity: 0.5 }]}
-                    onPress={() => Linking.openURL('https://palletium.com/upload')}
+                    pointerEvents="none"
                   >
                     <View style={styles.typeIconContainer}>
                       <Ionicons name="albums" size={32} color={theme.colors.textMuted} />
                     </View>
                     <Text style={styles.typeTitle}>Album / EP</Text>
                     <Text style={[styles.typeDescription, { color: theme.colors.textMuted }]}>
-                      Use web platform for albums
+                      Web only — use palletium.com
                     </Text>
-                  </TouchableOpacity>
+                  </View>
                 </View>
               )}
             </View>
@@ -786,6 +788,11 @@ export default function UploadScreen() {
           {/* Single Track: Audio Selection */}
           {step === 'audio' && (
             <View style={styles.stepContent}>
+              {DEBUG_UPLOAD && (
+                <Text style={{ color: '#0f0', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, marginBottom: 8 }}>
+                  AUDIO_STEP_ACTIVE | uploadType={uploadType} | step={step}
+                </Text>
+              )}
               <Text style={styles.stepTitle}>Select Audio File</Text>
               <Text style={styles.stepSubtitle}>WAV or FLAC format, max 100MB</Text>
 
