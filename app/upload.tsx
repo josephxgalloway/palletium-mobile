@@ -119,6 +119,7 @@ export default function UploadScreen() {
   const getCurrentStepIndex = () => getCurrentSteps().indexOf(step as any);
 
   const pickAudioFile = async (multiple = false) => {
+    if (DEBUG_UPLOAD) Alert.alert('File Picker', `Tapped. DocumentPicker available: ${isDocumentPickerAvailable}`);
     if (!isDocumentPickerAvailable || !DocumentPicker) {
       Alert.alert(
         'Feature Unavailable',
@@ -595,6 +596,7 @@ export default function UploadScreen() {
   };
 
   const selectUploadType = (type: UploadType) => {
+    if (DEBUG_UPLOAD) Alert.alert('Upload Type', `Selected: ${type}`);
     setUploadType(type);
     if (type === 'single') {
       setStep('audio');
