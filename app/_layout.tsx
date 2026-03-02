@@ -153,7 +153,7 @@ export default function RootLayout() {
             <Stack.Screen name="+not-found" />
           </Stack>
           {/* Email verification banner for unverified users */}
-          {isAuthenticated && <EmailVerificationBanner />}
+          {isAuthenticated && <EmailVerificationBanner screenName="root_layout" />}
           {/* Mini player shows above tab bar */}
           <MiniPlayer />
           {/* Signup prompt for free users */}

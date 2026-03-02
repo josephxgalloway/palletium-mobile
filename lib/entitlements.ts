@@ -14,6 +14,8 @@ export interface UserEntitlements {
   isVerifiedArtist: boolean;
   hasActiveListenerSubscription: boolean;
   canUploadMusic: boolean;
+  /** User is in the listener rewards funnel (has or could have a listener subscription). Pure artists = false. */
+  canEarnListenerRewards: boolean;
   listenerTier: ListenerTier;
   roleLabel: 'Admin' | 'Artist + Listener' | 'Artist' | 'Listener';
 }
@@ -28,6 +30,7 @@ export function getUserEntitlements(user: User | null | undefined): UserEntitlem
       isVerifiedArtist: false,
       hasActiveListenerSubscription: false,
       canUploadMusic: false,
+      canEarnListenerRewards: false,
       listenerTier: 'none',
       roleLabel: 'Listener',
     };
@@ -72,12 +75,18 @@ export function getUserEntitlements(user: User | null | undefined): UserEntitlem
     roleLabel = 'Listener';
   }
 
+  // Listener rewards require listener subscription + email verification.
+  // Pure artists (no listener subscription) are not in the rewards funnel.
+  // Hybrid accounts (artist + active listener subscription) ARE eligible.
+  const canEarnListenerRewards = !isArtist || hasActiveListenerSubscription;
+
   return {
     isAdmin,
     isArtist,
     isVerifiedArtist,
     hasActiveListenerSubscription,
     canUploadMusic: true, // Any authenticated user can upload; server enforces cap/review
+    canEarnListenerRewards,
     listenerTier,
     roleLabel,
   };

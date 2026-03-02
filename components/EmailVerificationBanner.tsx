@@ -1,25 +1,29 @@
 import { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { Alert, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Linking from 'expo-linking';
 import { theme } from '@/constants/theme';
 import { useAuthStore } from '@/lib/store/authStore';
+import { getUserEntitlements } from '@/lib/entitlements';
 import api from '@/lib/api/client';
 
 const RESEND_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const DEBUG = process.env.EXPO_PUBLIC_DEBUG_UPLOAD_UI === 'true';
 
 /**
  * Amber banner shown to users who haven't verified their email.
+ * Only renders for users in the listener rewards funnel (canEarnListenerRewards).
  * Dismissible per session (React state — returns on app restart).
  *
  * Mirrors web: palletium-platform/src/components/EmailVerificationBanner.tsx
  */
-export function EmailVerificationBanner() {
+export function EmailVerificationBanner({ screenName }: { screenName?: string }) {
   const { user } = useAuthStore();
   const [dismissed, setDismissed] = useState(false);
   const [resending, setResending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [lastResendAt, setLastResendAt] = useState<number>(0);
+
+  const { canEarnListenerRewards } = getUserEntitlements(user);
 
   const handleResend = useCallback(async () => {
     const now = Date.now();
@@ -46,13 +50,23 @@ export function EmailVerificationBanner() {
   }, [lastResendAt]);
 
   const handleVerifyNow = useCallback(() => {
-    Linking.openURL('https://palletium.com/verify-email');
+    Alert.alert(
+      'Check Your Email',
+      'Open the verification link we sent to your email. If you don\'t see it, tap "Resend" or check your spam folder.',
+      [{ text: 'OK' }]
+    );
   }, []);
 
   // Hide conditions
   if (!user) return null;
   if (user.email_verified !== false) return null;
+  if (!canEarnListenerRewards) return null; // Pure artists are not in the rewards funnel
   if (dismissed) return null;
+
+  // Debug breadcrumb: log which screen is rendering the banner (preview only)
+  if (DEBUG) {
+    console.log(`[EmailVerificationBanner] rendering on screen="${screenName ?? 'unknown'}" user.type=${user.type}`);
+  }
 
   return (
     <View style={styles.container}>
