@@ -85,28 +85,73 @@ function ArtistEarningsScreen() {
 
             if (analyticsData) {
                 // Analytics endpoint returns values in dollars - convert to cents for internal consistency
+                const totalEarningsCents = Math.round((analyticsData.totalEarnings || 0) * 100);
+                const pendingCents = Math.round((analyticsData.pendingEarnings || 0) * 100);
+                const firstListens = analyticsData.firstListens || analyticsData.discoveries || 0;
+                const repeatListens = (analyticsData.totalPlays || 0) - firstListens;
+
+                // Prefer API per-type earnings (settled truth via SUM(payment_amount)) when available.
+                // Fall back to proportional derivation for pre-F1 API versions.
+                let firstListenCents: number;
+                let repeatListenCents: number;
+
+                if (analyticsData.firstListenEarnings != null && analyticsData.repeatListenEarnings != null) {
+                    // API returns settled amounts in dollars
+                    firstListenCents = Math.round((analyticsData.firstListenEarnings || 0) * 100);
+                    repeatListenCents = Math.round((analyticsData.repeatListenEarnings || 0) * 100);
+                } else {
+                    // Fallback: derive proportionally from total using formula rates
+                    const grossFirstCents = firstListens * 100;
+                    const grossRepeatCents = repeatListens * 1;
+                    const grossTotalCents = grossFirstCents + grossRepeatCents;
+
+                    firstListenCents = grossTotalCents > 0
+                        ? Math.round(totalEarningsCents * (grossFirstCents / grossTotalCents))
+                        : 0;
+                    repeatListenCents = grossTotalCents > 0
+                        ? totalEarningsCents - firstListenCents
+                        : 0;
+                }
+
                 detailedSummary = {
-                    total_earnings: (analyticsData.totalEarnings || 0) * 100,
-                    pending_earnings: (analyticsData.pendingEarnings || 0) * 100,
-                    paid_earnings: ((analyticsData.totalEarnings || 0) - (analyticsData.pendingEarnings || 0)) * 100,
-                    first_listen_earnings: (analyticsData.firstListenEarnings || 0) * 100,
-                    repeat_listen_earnings: (analyticsData.repeatListenEarnings || 0) * 100,
+                    total_earnings: totalEarningsCents,
+                    pending_earnings: pendingCents,
+                    paid_earnings: totalEarningsCents - pendingCents,
+                    first_listen_earnings: firstListenCents,
+                    repeat_listen_earnings: repeatListenCents,
                     total_plays: analyticsData.totalPlays || 0,
-                    first_listens: analyticsData.firstListens || analyticsData.discoveries || 0,
-                    repeat_listens: (analyticsData.totalPlays || 0) - (analyticsData.firstListens || 0),
+                    first_listens: firstListens,
+                    repeat_listens: repeatListens,
                     unique_listeners: analyticsData.uniqueListeners || 0,
                 };
             } else {
                 // Dashboard data - assume values are in cents
+                const dbTotalCents = dashboardData.total_revenue || dashboardData.total_earnings || 0;
+                const dbPendingCents = dashboardData.pending_revenue || dashboardData.pending_earnings || 0;
+                const dbFirstListens = dashboardData.first_listens || dashboardData.discovery_count || 0;
+                const dbRepeatListens = (dashboardData.total_plays || 0) - dbFirstListens;
+
+                // Derive per-type earnings proportionally (same formula as analytics branch)
+                const dbGrossFirst = dbFirstListens * 100;
+                const dbGrossRepeat = dbRepeatListens * 1;
+                const dbGrossTotal = dbGrossFirst + dbGrossRepeat;
+
+                const dbFirstCents = dbGrossTotal > 0
+                    ? Math.round(dbTotalCents * (dbGrossFirst / dbGrossTotal))
+                    : 0;
+                const dbRepeatCents = dbGrossTotal > 0
+                    ? dbTotalCents - dbFirstCents
+                    : 0;
+
                 detailedSummary = {
-                    total_earnings: dashboardData.total_revenue || dashboardData.total_earnings || 0,
-                    pending_earnings: dashboardData.pending_revenue || dashboardData.pending_earnings || 0,
-                    paid_earnings: (dashboardData.total_revenue || 0) - (dashboardData.pending_revenue || 0),
-                    first_listen_earnings: dashboardData.first_listen_revenue || 0,
-                    repeat_listen_earnings: dashboardData.repeat_listen_revenue || 0,
+                    total_earnings: dbTotalCents,
+                    pending_earnings: dbPendingCents,
+                    paid_earnings: dbTotalCents - dbPendingCents,
+                    first_listen_earnings: dbFirstCents,
+                    repeat_listen_earnings: dbRepeatCents,
                     total_plays: dashboardData.total_plays || 0,
-                    first_listens: dashboardData.first_listens || dashboardData.discovery_count || 0,
-                    repeat_listens: (dashboardData.total_plays || 0) - (dashboardData.first_listens || 0),
+                    first_listens: dbFirstListens,
+                    repeat_listens: dbRepeatListens,
                     unique_listeners: dashboardData.unique_listeners || 0,
                 };
             }

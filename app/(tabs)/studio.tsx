@@ -3,15 +3,16 @@ import api, { getArtistTracks } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,7 +22,9 @@ interface Track {
   id: number;
   title?: string;
   genre?: string;
+  plays?: number;
   play_count?: number;
+  duration?: number;
   review_status?: 'pending' | 'approved' | 'rejected' | 'draft';
   is_public?: boolean;
   created_at?: string;
@@ -52,13 +55,11 @@ export default function StudioScreen() {
     }
 
     try {
-      // Fetch tracks and stats in parallel
       const [tracksData, analyticsData] = await Promise.all([
         getArtistTracks(user.id).catch(() => []),
         api.get(`/analytics/artist/${user.id}/overview`).catch(() => ({ data: {} })),
       ]);
 
-      // Handle various response formats for tracks
       let trackList: Track[] = [];
       if (Array.isArray(tracksData)) {
         trackList = tracksData;
@@ -68,7 +69,6 @@ export default function StudioScreen() {
         trackList = tracksData.data;
       }
 
-      // Sort by created_at descending (newest first)
       trackList.sort((a, b) => {
         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -77,7 +77,6 @@ export default function StudioScreen() {
 
       setTracks(trackList);
 
-      // Set stats from analytics
       const analytics = analyticsData.data || {};
       setStats({
         totalTracks: trackList.length,
@@ -95,7 +94,6 @@ export default function StudioScreen() {
     }
   }, [user?.id, isArtist]);
 
-  // Refresh when screen is focused
   useFocusEffect(
     useCallback(() => {
       fetchData();
@@ -116,6 +114,13 @@ export default function StudioScreen() {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
     return num.toString();
+  };
+
+  const formatDuration = (seconds: number | undefined | null): string => {
+    if (!seconds) return '';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   const getStatusColor = (status: string | undefined | null) => {
@@ -145,12 +150,19 @@ export default function StudioScreen() {
   if (!isArtist) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <LinearGradient
+          colors={['rgba(108,134,168,0.12)', 'transparent']}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
         <View style={styles.header}>
           <Text style={styles.title}>Studio</Text>
           <Text style={styles.subtitle}>Artist tools and track management</Text>
         </View>
         <View style={styles.center}>
-          <Ionicons name="mic-outline" size={64} color={theme.colors.textMuted} />
+          <View style={styles.emptyIconRing}>
+            <Ionicons name="mic-outline" size={48} color={theme.colors.textMuted} />
+          </View>
           <Text style={styles.emptyText}>Artist Studio</Text>
           <Text style={styles.emptySubtext}>This feature is for artists only</Text>
         </View>
@@ -160,74 +172,99 @@ export default function StudioScreen() {
 
   const renderHeader = () => (
     <View>
-      {/* Stats Cards */}
+      {/* Glass Stats Cards */}
       <View style={styles.statsGrid}>
-        <TouchableOpacity
+        <Pressable
           style={styles.statCard}
           onPress={() => router.push('/stats/earnings' as any)}
         >
-          <Ionicons name="cash-outline" size={24} color={theme.colors.success} />
+          <LinearGradient
+            colors={['rgba(34,139,34,0.15)', 'rgba(34,139,34,0.05)']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.statIconRing}>
+            <Ionicons name="cash-outline" size={20} color={theme.colors.success} />
+          </View>
           <Text style={styles.statValue}>${(stats?.totalEarnings || 0).toFixed(2)}</Text>
           <Text style={styles.statLabel}>Earnings</Text>
-        </TouchableOpacity>
+        </Pressable>
 
         <View style={styles.statCard}>
-          <Ionicons name="play-outline" size={24} color={theme.colors.primary} />
+          <LinearGradient
+            colors={['rgba(108,134,168,0.15)', 'rgba(108,134,168,0.05)']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.statIconRing}>
+            <Ionicons name="play-outline" size={20} color={theme.colors.primary} />
+          </View>
           <Text style={styles.statValue}>{formatNumber(stats?.totalPlays || 0)}</Text>
           <Text style={styles.statLabel}>Plays</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Ionicons name="people-outline" size={24} color={theme.colors.accent} />
+          <LinearGradient
+            colors={['rgba(192,200,214,0.12)', 'rgba(192,200,214,0.04)']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.statIconRing}>
+            <Ionicons name="people-outline" size={20} color={theme.colors.accent} />
+          </View>
           <Text style={styles.statValue}>{formatNumber(stats?.uniqueListeners || 0)}</Text>
           <Text style={styles.statLabel}>Listeners</Text>
         </View>
       </View>
 
-      {/* Quick Actions */}
-      <View style={styles.actionsSection}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => router.push('/stats/earnings' as any)}
+      {/* Gradient Earnings CTA */}
+      <Pressable
+        style={styles.actionButton}
+        onPress={() => router.push('/stats/earnings' as any)}
+      >
+        <LinearGradient
+          colors={['#6c86a8', '#4a6a8a']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.actionGradient}
         >
-          <LinearGradient
-            colors={[theme.colors.success, '#228B22']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.actionGradient}
-          >
-            <Ionicons name="trending-up" size={20} color="#fff" />
-            <Text style={styles.actionText}>View Earnings</Text>
-            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
-          </LinearGradient>
-        </TouchableOpacity>
+          <Ionicons name="trending-up" size={20} color="#fff" />
+          <Text style={styles.actionText}>View Earnings</Text>
+          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
+        </LinearGradient>
+      </Pressable>
 
-        {(stats?.pendingEarnings || 0) > 0 && (
-          <View style={styles.pendingBanner}>
-            <Ionicons name="time-outline" size={16} color={theme.colors.warning} />
-            <Text style={styles.pendingText}>
-              ${(stats?.pendingEarnings || 0).toFixed(2)} pending payout
-            </Text>
-          </View>
-        )}
-      </View>
+      {(stats?.pendingEarnings || 0) > 0 && (
+        <View style={styles.pendingBanner}>
+          <Ionicons name="time-outline" size={16} color={theme.colors.warning} />
+          <Text style={styles.pendingText}>
+            ${(stats?.pendingEarnings || 0).toFixed(2)} pending payout
+          </Text>
+        </View>
+      )}
 
-      {/* Upload Prompt */}
-      <TouchableOpacity
+      {/* Glass Upload CTA */}
+      <Pressable
         style={styles.uploadPrompt}
         onPress={() => router.push('/upload' as any)}
       >
+        <LinearGradient
+          colors={['rgba(27,31,43,0.6)', 'rgba(33,38,55,0.6)']}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.uploadIcon}>
-          <Ionicons name="cloud-upload-outline" size={24} color={theme.colors.accent} />
+          <LinearGradient
+            colors={['rgba(192,200,214,0.2)', 'rgba(108,134,168,0.2)']}
+            style={styles.uploadIconGradient}
+          >
+            <Ionicons name="cloud-upload-outline" size={24} color={theme.colors.accent} />
+          </LinearGradient>
         </View>
         <View style={styles.uploadTextContainer}>
           <Text style={styles.uploadTitle}>Upload New Track</Text>
           <Text style={styles.uploadSubtitle}>Add music to your catalog</Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
-      </TouchableOpacity>
+      </Pressable>
 
-      {/* Tracks Section Header */}
+      {/* Section Header */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>My Tracks</Text>
         <Text style={styles.trackCount}>{tracks.length} tracks</Text>
@@ -236,23 +273,17 @@ export default function StudioScreen() {
   );
 
   const renderTrackItem = ({ item }: { item: Track }) => (
-    <TouchableOpacity style={styles.trackCard} onPress={() => handleEditTrack(item)}>
+    <Pressable style={styles.trackCard} onPress={() => handleEditTrack(item)}>
       <View style={styles.trackCover}>
-        {item.cover_art_url ? (
-          <View style={styles.coverPlaceholder}>
-            <Ionicons name="musical-notes" size={20} color={theme.colors.textMuted} />
-          </View>
-        ) : (
-          <View style={styles.coverPlaceholder}>
-            <Ionicons name="musical-notes" size={20} color={theme.colors.textMuted} />
-          </View>
-        )}
+        <View style={styles.coverPlaceholder}>
+          <Ionicons name="musical-notes" size={20} color={theme.colors.textMuted} />
+        </View>
       </View>
 
       <View style={styles.trackInfo}>
         <Text style={styles.trackTitle} numberOfLines={1}>{item.title || 'Untitled'}</Text>
         <Text style={styles.trackMeta}>
-          {item.genre || 'No genre'} • {formatNumber(item.play_count)} plays
+          {item.genre || 'No genre'}{item.duration ? ` · ${formatDuration(item.duration)}` : ''} · {formatNumber(item.plays ?? item.play_count)} plays
         </Text>
       </View>
 
@@ -262,7 +293,7 @@ export default function StudioScreen() {
         </View>
         <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 
   const renderEmptyTracks = () => (
@@ -276,6 +307,11 @@ export default function StudioScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <LinearGradient
+          colors={['rgba(108,134,168,0.12)', 'transparent']}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
         <View style={styles.header}>
           <Text style={styles.title}>Studio</Text>
           <Text style={styles.subtitle}>Manage your music</Text>
@@ -289,6 +325,14 @@ export default function StudioScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Ambient gradient */}
+      <LinearGradient
+        colors={['rgba(108,134,168,0.12)', 'transparent', 'rgba(108,134,168,0.06)']}
+        locations={[0, 0.4, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
       <View style={styles.header}>
         <Text style={styles.title}>Studio</Text>
         <Text style={styles.subtitle}>Manage your music</Text>
@@ -325,24 +369,36 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: theme.fontSize.xxxl,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
+    letterSpacing: 0.3,
   },
   subtitle: {
     fontSize: theme.fontSize.md,
     color: theme.colors.textSecondary,
     marginTop: theme.spacing.xs,
+    letterSpacing: 0.2,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  emptyIconRing: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(108,134,168,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.1)',
+  },
   listContent: {
     paddingHorizontal: theme.spacing.md,
     paddingBottom: 100,
   },
-  // Stats Grid
+  // Glass Stats Grid
   statsGrid: {
     flexDirection: 'row',
     gap: theme.spacing.sm,
@@ -350,14 +406,24 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: theme.colors.surface,
+    borderRadius: 14,
     padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
+  },
+  statIconRing: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(192,200,214,0.08)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   statValue: {
     fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
     marginTop: theme.spacing.xs,
   },
@@ -365,14 +431,13 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.textMuted,
     marginTop: 2,
+    letterSpacing: 0.3,
   },
-  // Actions Section
-  actionsSection: {
-    marginBottom: theme.spacing.lg,
-  },
+  // Gradient Actions
   actionButton: {
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 14,
     overflow: 'hidden',
+    marginBottom: theme.spacing.sm,
   },
   actionGradient: {
     flexDirection: 'row',
@@ -389,32 +454,39 @@ const styles = StyleSheet.create({
   pendingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
     padding: theme.spacing.sm,
-    borderRadius: theme.borderRadius.sm,
-    marginTop: theme.spacing.sm,
+    borderRadius: 10,
+    marginBottom: theme.spacing.lg,
     gap: theme.spacing.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.15)',
   },
   pendingText: {
     color: theme.colors.warning,
     fontSize: theme.fontSize.sm,
     fontWeight: '500',
   },
-  // Upload Prompt
+  // Glass Upload CTA
   uploadPrompt: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
+    borderRadius: 14,
     padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
     marginBottom: theme.spacing.lg,
     gap: theme.spacing.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
   },
   uploadIcon: {
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  uploadIconGradient: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(184, 134, 11, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -440,27 +512,30 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
+    letterSpacing: 0.2,
   },
   trackCount: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.textMuted,
   },
-  // Track Card
+  // Glass Track Card
   trackCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
+    backgroundColor: 'rgba(27,31,43,0.6)',
     padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 14,
     marginBottom: theme.spacing.sm,
     gap: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
   },
   trackCover: {
     width: 48,
     height: 48,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 10,
     overflow: 'hidden',
   },
   coverPlaceholder: {
@@ -469,7 +544,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 10,
   },
   trackInfo: {
     flex: 1,
@@ -478,6 +553,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontWeight: '600',
     color: theme.colors.textPrimary,
+    letterSpacing: 0.2,
   },
   trackMeta: {
     fontSize: theme.fontSize.sm,
@@ -492,12 +568,13 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   statusText: {
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#fff',
+    letterSpacing: 0.5,
   },
   // Empty States
   emptyTracks: {
@@ -506,7 +583,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: theme.fontSize.lg,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: theme.colors.textPrimary,
     marginTop: theme.spacing.md,
   },

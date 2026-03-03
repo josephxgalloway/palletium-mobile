@@ -40,6 +40,17 @@ interface PlayerState {
   previewEndTime: number | null;
   isFadingOut: boolean;
 
+  // Settlement data for earnings ticker
+  lastSettlement: {
+    paymentType: string;
+    artistPayment: number;
+    listenerDividend: number;
+    isFirstListen: boolean;
+    tierMultiplier: number;
+    listenerTier: string;
+    timestamp: number;
+  } | null;
+
   // Actions
   playTrack: (track: Track) => Promise<void>;
   addToQueue: (track: Track) => Promise<void>;
@@ -104,6 +115,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   showSignupPrompt: false,
   previewEndTime: null,
   isFadingOut: false,
+  lastSettlement: null,
 
   loadPreviewCount: async () => {
     try {
@@ -165,6 +177,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       if (isNativePlayerAvailable && TrackPlayer) {
         // Real playback with native module
+        console.log('[Player] Native playback:', { id: track.id, url: track.audio_url?.substring(0, 80), duration: trackDuration });
         await TrackPlayer.reset();
         await TrackPlayer.add({
           id: track.id.toString(),
@@ -181,6 +194,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         }
 
         await TrackPlayer.play();
+        console.log('[Player] TrackPlayer.play() called successfully');
       } else {
         // Mock mode - just update UI state
         console.log('[Mock Player] Playing:', track.title, isPreview ? '(PREVIEW)' : '');
@@ -195,6 +209,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         duration: trackDuration,
         isPreviewMode: isPreview,
         previewEndTime: isPreview ? Date.now() + (PREVIEW_DURATION * 1000) : null,
+        lastSettlement: null,
       });
 
       // Show preview count toast
@@ -339,6 +354,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         hasRecordedPlay: false,
         isPreviewMode: false,
         previewEndTime: null,
+        lastSettlement: null,
       });
     } catch (error) {
       console.error('Failed to stop:', error);
@@ -472,11 +488,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const response = await api.post('/plays/record', payload);
       console.log('Play recorded:', response.data);
 
-      set({ hasRecordedPlay: true });
+      const payment = response.data.payment;
+      set({
+        hasRecordedPlay: true,
+        lastSettlement: payment ? {
+          paymentType: payment.paymentType || 'unknown',
+          artistPayment: payment.artistPayment || 0,
+          listenerDividend: payment.listenerDividend || 0,
+          isFirstListen: response.data.is_first_listen || false,
+          tierMultiplier: payment.tierMultiplier || 1.0,
+          listenerTier: payment.listenerTier || 'BRONZE',
+          timestamp: Date.now(),
+        } : null,
+      });
 
       // Show payment toast with LISTENER dividend (not artist payment)
       const Toast = (await import('react-native-toast-message')).default;
-      const payment = response.data.payment;
 
       if (payment) {
         const isFirstListen = response.data.is_first_listen;
@@ -543,6 +570,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     previewEndTime: null,
     showSignupPrompt: false,
     isFadingOut: false,
+    lastSettlement: null,
   }),
 }));
 

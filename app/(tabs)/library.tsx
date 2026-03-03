@@ -3,11 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   FlatList,
   RefreshControl,
   ActivityIndicator,
-  Image,
   TextInput,
   Keyboard,
   Modal,
@@ -15,6 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import { useAuthStore } from '@/lib/store/authStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
 import api, { getLikedTracks } from '@/lib/api/client';
@@ -57,7 +59,6 @@ export default function LibraryScreen() {
           const response = await api.get('/users/history?limit=50');
           setHistory(response.data.plays || response.data?.history || response.data || []);
         } catch {
-          // Silently handle - endpoint may not be implemented yet
           setHistory([]);
         }
       } else if (activeTab === 'liked') {
@@ -65,7 +66,6 @@ export default function LibraryScreen() {
           const response = await getLikedTracks();
           setLikedTracks(response.tracks || response.data?.tracks || response || []);
         } catch {
-          // Silently handle - endpoint may not be implemented yet
           setLikedTracks([]);
         }
       }
@@ -134,7 +134,7 @@ export default function LibraryScreen() {
       Toast.show({ type: 'success', text1: 'Playlist created!' });
       setShowCreatePlaylist(false);
       setNewPlaylistName('');
-      fetchData(); // Refresh playlists
+      fetchData();
     } catch (error: any) {
       Toast.show({
         type: 'error',
@@ -150,30 +150,42 @@ export default function LibraryScreen() {
   if (!isAuthenticated) {
     return (
       <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['rgba(108,134,168,0.12)', 'transparent']}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
         <View style={styles.emptyState}>
-          <Ionicons name="library-outline" size={64} color={theme.colors.textMuted} />
+          <View style={styles.emptyIconRing}>
+            <Ionicons name="library-outline" size={48} color={theme.colors.textMuted} />
+          </View>
           <Text style={styles.emptyTitle}>Your Library</Text>
           <Text style={styles.emptySubtitle}>
             Sign in to see your playlists and listening history
           </Text>
-          <TouchableOpacity
+          <Pressable
             style={styles.signInButton}
             onPress={() => router.push('/(auth)/login')}
           >
-            <Text style={styles.signInText}>Sign In</Text>
-          </TouchableOpacity>
+            <LinearGradient
+              colors={['#c0c8d6', '#9ba8bc']}
+              style={styles.signInGradient}
+            >
+              <Text style={styles.signInText}>Sign In</Text>
+            </LinearGradient>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
   }
 
   const renderPlaylist = ({ item }: { item: Playlist }) => (
-    <TouchableOpacity
+    <Pressable
       style={styles.playlistCard}
       onPress={() => router.push(`/playlist/${item.id}` as any)}
     >
       {item.cover_url ? (
-        <Image source={{ uri: item.cover_url }} style={styles.playlistCover} />
+        <Image source={{ uri: item.cover_url }} style={styles.playlistCover} transition={200} />
       ) : (
         <View style={[styles.playlistCover, styles.playlistCoverPlaceholder]}>
           <Ionicons name="musical-notes" size={24} color={theme.colors.textMuted} />
@@ -186,7 +198,7 @@ export default function LibraryScreen() {
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
-    </TouchableOpacity>
+    </Pressable>
   );
 
   const renderHistoryItem = ({ item }: { item: RecentPlay }) => {
@@ -194,13 +206,13 @@ export default function LibraryScreen() {
     const artistName = getArtistName(item.track);
 
     return (
-      <TouchableOpacity
+      <Pressable
         style={styles.historyItem}
         onPress={() => playTrack(item.track)}
         onLongPress={() => router.push(`/track/${item.track.id}` as any)}
       >
         {coverUrl ? (
-          <Image source={{ uri: coverUrl }} style={styles.historyCover} />
+          <Image source={{ uri: coverUrl }} style={styles.historyCover} transition={200} />
         ) : (
           <View style={[styles.historyCover, styles.historyCoverPlaceholder]}>
             <Ionicons name="musical-note" size={18} color={theme.colors.textMuted} />
@@ -213,11 +225,14 @@ export default function LibraryScreen() {
           </Text>
         </View>
         {item.is_first_listen && (
-          <View style={styles.firstListenBadge}>
+          <LinearGradient
+            colors={['#6c86a8', '#c0c8d6']}
+            style={styles.firstListenBadge}
+          >
             <Text style={styles.firstListenText}>1st</Text>
-          </View>
+          </LinearGradient>
         )}
-      </TouchableOpacity>
+      </Pressable>
     );
   };
 
@@ -246,13 +261,13 @@ export default function LibraryScreen() {
     const isActive = currentTrack?.id === item.id;
 
     return (
-      <TouchableOpacity
+      <Pressable
         style={[styles.likedTrackItem, isActive && styles.likedTrackItemActive]}
         onPress={() => handleTrackPress(item)}
         onLongPress={() => router.push(`/track/${item.id}` as any)}
       >
         {coverUrl ? (
-          <Image source={{ uri: coverUrl }} style={styles.likedTrackCover} />
+          <Image source={{ uri: coverUrl }} style={styles.likedTrackCover} transition={200} />
         ) : (
           <View style={[styles.likedTrackCover, styles.likedTrackCoverPlaceholder]}>
             <Ionicons name="musical-note" size={20} color={theme.colors.textMuted} />
@@ -275,15 +290,9 @@ export default function LibraryScreen() {
             <Ionicons name="volume-high" size={16} color={theme.colors.primary} />
           )}
         </View>
-        <Ionicons name="heart" size={18} color={theme.colors.error} style={styles.heartIcon} />
-      </TouchableOpacity>
+        <Ionicons name="heart" size={18} color="#e74c3c" style={styles.heartIcon} />
+      </Pressable>
     );
-  };
-
-  const formatDurationSearch = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const renderSearchResult = ({ item }: { item: Track }) => {
@@ -292,7 +301,7 @@ export default function LibraryScreen() {
     const artistName = getArtistName(item);
 
     return (
-      <TouchableOpacity
+      <Pressable
         style={[styles.historyItem, isActive && styles.likedTrackItemActive]}
         onPress={() => {
           Keyboard.dismiss();
@@ -300,7 +309,7 @@ export default function LibraryScreen() {
         }}
       >
         {coverUrl ? (
-          <Image source={{ uri: coverUrl }} style={styles.historyCover} />
+          <Image source={{ uri: coverUrl }} style={styles.historyCover} transition={200} />
         ) : (
           <View style={[styles.historyCover, styles.historyCoverPlaceholder]}>
             <Ionicons name="musical-note" size={18} color={theme.colors.textMuted} />
@@ -311,18 +320,26 @@ export default function LibraryScreen() {
             {item.title}
           </Text>
           <Text style={styles.historyArtist} numberOfLines={1}>
-            {artistName} • {formatDurationSearch(getDuration(item))}
+            {artistName} · {formatDuration(getDuration(item))}
           </Text>
         </View>
         {isActive && isPlaying && (
           <Ionicons name="volume-high" size={18} color={theme.colors.primary} />
         )}
-      </TouchableOpacity>
+      </Pressable>
     );
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Ambient gradient */}
+      <LinearGradient
+        colors={['rgba(108,134,168,0.12)', 'transparent', 'rgba(108,134,168,0.06)']}
+        locations={[0, 0.4, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -330,37 +347,50 @@ export default function LibraryScreen() {
           <Text style={styles.subtitle}>Playlists, history & favorites</Text>
         </View>
         {isAuthenticated && activeTab === 'playlists' && (
-          <TouchableOpacity
+          <Pressable
             style={styles.addButton}
             onPress={() => setShowCreatePlaylist(true)}
           >
-            <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
-          </TouchableOpacity>
+            <LinearGradient
+              colors={['rgba(192,200,214,0.15)', 'rgba(108,134,168,0.15)']}
+              style={styles.addButtonGradient}
+            >
+              <Ionicons name="add" size={22} color={theme.colors.primary} />
+            </LinearGradient>
+          </Pressable>
         )}
       </View>
 
-      {/* Search Bar */}
+      {/* Frosted Glass Search Bar */}
       {isAuthenticated && (
         <View style={styles.searchContainer}>
-          <Ionicons name="search" size={18} color={theme.colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search songs, artists..."
-            placeholderTextColor={theme.colors.textMuted}
-            value={searchQuery}
-            onChangeText={handleSearch}
-            onFocus={() => setActiveTab('search')}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); setActiveTab('playlists'); }}>
-              <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
-            </TouchableOpacity>
-          )}
+          <BlurView intensity={40} tint="dark" style={styles.searchBlur}>
+            <LinearGradient
+              colors={['rgba(27,31,43,0.7)', 'rgba(33,38,55,0.7)']}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.searchInner}>
+              <Ionicons name="search" size={18} color={theme.colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search songs, artists..."
+                placeholderTextColor={theme.colors.textMuted}
+                value={searchQuery}
+                onChangeText={handleSearch}
+                onFocus={() => setActiveTab('search')}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={() => { setSearchQuery(''); setSearchResults([]); setActiveTab('playlists'); }}>
+                  <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+                </Pressable>
+              )}
+            </View>
+          </BlurView>
         </View>
       )}
 
-      {/* Tabs - hidden when searching */}
+      {/* Glass Pill Tabs */}
       {activeTab !== 'search' && (
         <View style={styles.tabs}>
           <TabButton
@@ -430,10 +460,10 @@ export default function LibraryScreen() {
             <View style={styles.emptyList}>
               <Ionicons name="musical-notes-outline" size={48} color={theme.colors.textMuted} />
               <Text style={styles.emptyListText}>No playlists yet</Text>
-              <TouchableOpacity style={styles.createButton} onPress={() => setShowCreatePlaylist(true)}>
+              <Pressable style={styles.createButton} onPress={() => setShowCreatePlaylist(true)}>
                 <Ionicons name="add-circle" size={20} color={theme.colors.primary} />
                 <Text style={styles.createButtonText}>Create Your First Playlist</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           }
         />
@@ -482,7 +512,7 @@ export default function LibraryScreen() {
         />
       )}
 
-      {/* Create Playlist Modal */}
+      {/* Create Playlist Modal — Frosted Glass */}
       <Modal
         visible={showCreatePlaylist}
         animationType="slide"
@@ -490,12 +520,17 @@ export default function LibraryScreen() {
         onRequestClose={() => setShowCreatePlaylist(false)}
       >
         <View style={styles.modalContainer}>
+          <LinearGradient
+            colors={['rgba(108,134,168,0.08)', 'transparent']}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowCreatePlaylist(false)}>
+            <Pressable onPress={() => setShowCreatePlaylist(false)}>
               <Text style={styles.modalCancel}>Cancel</Text>
-            </TouchableOpacity>
+            </Pressable>
             <Text style={styles.modalTitle}>New Playlist</Text>
-            <TouchableOpacity onPress={handleCreatePlaylist} disabled={creatingPlaylist}>
+            <Pressable onPress={handleCreatePlaylist} disabled={creatingPlaylist}>
               {creatingPlaylist ? (
                 <ActivityIndicator size="small" color={theme.colors.primary} />
               ) : (
@@ -503,12 +538,17 @@ export default function LibraryScreen() {
                   Create
                 </Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <View style={styles.modalContent}>
             <View style={styles.playlistIconContainer}>
-              <Ionicons name="musical-notes" size={48} color={theme.colors.textMuted} />
+              <LinearGradient
+                colors={['rgba(108,134,168,0.2)', 'rgba(192,200,214,0.1)']}
+                style={styles.playlistIconGradient}
+              >
+                <Ionicons name="musical-notes" size={48} color={theme.colors.textMuted} />
+              </LinearGradient>
             </View>
             <TextInput
               style={styles.playlistNameInput}
@@ -532,12 +572,12 @@ function TabButton({ label, active, onPress }: {
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity
+    <Pressable
       style={[styles.tab, active && styles.tabActive]}
       onPress={onPress}
     >
       <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -555,24 +595,43 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: theme.fontSize.xxxl,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
+    letterSpacing: 0.3,
   },
   subtitle: {
     fontSize: theme.fontSize.md,
     color: theme.colors.textSecondary,
     marginTop: theme.spacing.xs,
+    letterSpacing: 0.2,
   },
   addButton: {
-    padding: theme.spacing.xs,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
+  addButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.15)',
+  },
+  // Frosted Glass Search
   searchContainer: {
+    paddingHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
+  searchBlur: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
+  },
+  searchInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    marginHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
     paddingHorizontal: theme.spacing.md,
     height: 44,
     gap: theme.spacing.sm,
@@ -582,6 +641,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     color: theme.colors.textPrimary,
   },
+  // Glass Pill Tabs
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: theme.spacing.md,
@@ -589,21 +649,24 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   tab: {
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: 10,
     paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+    backgroundColor: 'rgba(192,200,214,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
   },
   tabActive: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: 'rgba(108,134,168,0.25)',
+    borderColor: 'rgba(192,200,214,0.15)',
   },
   tabText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.textSecondary,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: '500',
   },
   tabTextActive: {
-    color: theme.colors.background,
+    color: '#fff',
   },
   loader: {
     marginTop: theme.spacing.xl,
@@ -612,18 +675,23 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     paddingBottom: 100,
   },
+  // Glass Playlist Card
   playlistCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
+    backgroundColor: 'rgba(27,31,43,0.6)',
     padding: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 14,
     marginBottom: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
   },
   playlistCover: {
     width: 56,
     height: 56,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
   },
   playlistCoverPlaceholder: {
     backgroundColor: theme.colors.surfaceElevated,
@@ -636,25 +704,30 @@ const styles = StyleSheet.create({
   },
   playlistName: {
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.semibold,
+    fontWeight: '600',
     color: theme.colors.textPrimary,
+    letterSpacing: 0.2,
   },
   playlistMeta: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.textMuted,
     marginTop: 2,
   },
+  // History Item
   historyItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: theme.spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: 10,
+    marginBottom: 2,
   },
   historyCover: {
     width: 48,
     height: 48,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
   },
   historyCoverPlaceholder: {
     backgroundColor: theme.colors.surface,
@@ -668,33 +741,45 @@ const styles = StyleSheet.create({
   historyTitle: {
     fontSize: theme.fontSize.md,
     color: theme.colors.textPrimary,
+    fontWeight: '500',
   },
   historyArtist: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.textMuted,
+    marginTop: 2,
   },
   firstListenBadge: {
-    backgroundColor: theme.colors.accent,
     paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 2,
-    borderRadius: theme.borderRadius.sm,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   firstListenText: {
     fontSize: theme.fontSize.xs,
-    color: theme.colors.background,
-    fontWeight: theme.fontWeight.bold,
+    color: '#fff',
+    fontWeight: '700',
   },
+  // Auth Empty State
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: theme.spacing.xl,
   },
+  emptyIconRing: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(108,134,168,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.1)',
+  },
   emptyTitle: {
     fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing.lg,
   },
   emptySubtitle: {
     fontSize: theme.fontSize.md,
@@ -704,16 +789,21 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   signInButton: {
-    backgroundColor: theme.colors.primary,
+    borderRadius: 14,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  signInGradient: {
     paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xxl,
-    borderRadius: theme.borderRadius.md,
+    alignItems: 'center',
+    borderRadius: 14,
   },
   signInText: {
     color: theme.colors.background,
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.semibold,
+    fontWeight: '700',
   },
+  // List Empty State
   emptyList: {
     alignItems: 'center',
     paddingVertical: theme.spacing.xxl,
@@ -721,11 +811,13 @@ const styles = StyleSheet.create({
   emptyListText: {
     fontSize: theme.fontSize.md,
     color: theme.colors.textMuted,
+    marginTop: theme.spacing.md,
   },
   emptyListSubtext: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.textMuted,
     marginTop: theme.spacing.xs,
+    textAlign: 'center',
   },
   createButton: {
     flexDirection: 'row',
@@ -736,26 +828,27 @@ const styles = StyleSheet.create({
   createButtonText: {
     color: theme.colors.primary,
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: '500',
   },
+  // Liked Tracks
   likedTrackItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: 10,
+    marginBottom: 2,
   },
   likedTrackItemActive: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.sm,
-    borderBottomWidth: 0,
-    marginVertical: 2,
+    backgroundColor: 'rgba(108,134,168,0.12)',
+    borderRadius: 10,
   },
   likedTrackCover: {
     width: 48,
     height: 48,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
   },
   likedTrackCoverPlaceholder: {
     backgroundColor: theme.colors.surface,
@@ -768,7 +861,7 @@ const styles = StyleSheet.create({
   },
   likedTrackTitle: {
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: '500',
     color: theme.colors.textPrimary,
   },
   likedTrackTitleActive: {
@@ -791,7 +884,7 @@ const styles = StyleSheet.create({
   heartIcon: {
     marginLeft: theme.spacing.sm,
   },
-  // Modal styles
+  // Frosted Glass Modal
   modalContainer: {
     flex: 1,
     backgroundColor: theme.colors.background,
@@ -803,11 +896,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: 'rgba(192,200,214,0.08)',
   },
   modalTitle: {
     fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
   },
   modalCancel: {
@@ -817,7 +910,7 @@ const styles = StyleSheet.create({
   modalCreate: {
     fontSize: theme.fontSize.md,
     color: theme.colors.primary,
-    fontWeight: theme.fontWeight.semibold,
+    fontWeight: '600',
   },
   modalCreateDisabled: {
     opacity: 0.5,
@@ -827,17 +920,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   playlistIconContainer: {
+    marginBottom: theme.spacing.xl,
+  },
+  playlistIconGradient: {
     width: 120,
     height: 120,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: theme.spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.1)',
   },
   playlistNameInput: {
     fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.semibold,
+    fontWeight: '600',
     color: theme.colors.textPrimary,
     textAlign: 'center',
     width: '100%',

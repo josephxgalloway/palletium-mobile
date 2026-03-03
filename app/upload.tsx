@@ -78,6 +78,9 @@ export default function UploadScreen() {
   // Upload type
   const [uploadType, setUploadType] = useState<UploadType | null>(null);
   const [step, setStep] = useState<Step>('type');
+
+  // Debug: log every render to catch re-mounts
+  console.log(`[Upload] RENDER step=${step} uploadType=${uploadType}`);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadPhase, setUploadPhase] = useState<UploadPhase | null>(null);
@@ -113,13 +116,13 @@ export default function UploadScreen() {
   const { isVerifiedArtist, canUploadMusic } = getUserEntitlements(user);
 
   const getSingleSteps = (): SingleStep[] => ['type', 'audio', 'metadata', 'artwork', 'rights'];
-  const getAlbumSteps = (): AlbumStep[] => ['type', 'tracks', 'album-info', 'artwork', 'track-details', 'rights'];
+  const getAlbumSteps = (): AlbumStep[] => ['type', 'album-info', 'artwork', 'tracks', 'track-details', 'rights'];
 
   const getCurrentSteps = () => uploadType === 'album' ? getAlbumSteps() : getSingleSteps();
   const getCurrentStepIndex = () => getCurrentSteps().indexOf(step as any);
 
   const pickAudioFile = async (multiple = false) => {
-    if (DEBUG_UPLOAD) Alert.alert('File Picker', `Tapped. DocumentPicker available: ${isDocumentPickerAvailable}`);
+    if (DEBUG_UPLOAD) pushDebugEvent(`File picker tapped. Available: ${isDocumentPickerAvailable}`);
     if (!isDocumentPickerAvailable || !DocumentPicker) {
       Alert.alert(
         'Feature Unavailable',
@@ -248,26 +251,26 @@ export default function UploadScreen() {
   };
 
   const handleSingleUpload = async () => {
-    if (DEBUG_UPLOAD) Alert.alert('Upload', 'Pressed');
+    if (DEBUG_UPLOAD) pushDebugEvent('Upload pressed');
 
     if (uploading) {
-      if (DEBUG_UPLOAD) Alert.alert('Blocked', 'Upload already in progress');
+      if (DEBUG_UPLOAD) pushDebugEvent('Blocked: already uploading');
       return;
     }
 
     if (!user) {
-      if (DEBUG_UPLOAD) Alert.alert('Blocked', 'Not authenticated');
+      if (DEBUG_UPLOAD) pushDebugEvent('Blocked: not authenticated');
       return;
     }
 
     if (!audioFile) {
-      if (DEBUG_UPLOAD) Alert.alert('Blocked', 'No file selected / picker cancelled');
+      if (DEBUG_UPLOAD) pushDebugEvent('Blocked: no file selected');
       Toast.show({ type: 'error', text1: 'Please complete all required fields' });
       return;
     }
 
     if (!artwork || !title || !genre) {
-      if (DEBUG_UPLOAD) Alert.alert('Blocked', 'Missing required fields (artwork/title/genre)');
+      if (DEBUG_UPLOAD) pushDebugEvent('Blocked: missing artwork/title/genre');
       Toast.show({ type: 'error', text1: 'Please complete all required fields' });
       return;
     }
@@ -384,7 +387,7 @@ export default function UploadScreen() {
         text1: 'Upload failed',
         text2: error.message || 'Please try again',
       });
-      setStep('rights');
+      setStep('audio');
     } finally {
       setUploading(false);
       setUploadPhase(null);
@@ -462,7 +465,7 @@ export default function UploadScreen() {
         text1: 'Upload failed',
         text2: error.message || 'Please try again',
       });
-      setStep('rights');
+      setStep('track-details');
     } finally {
       setUploading(false);
     }
@@ -573,6 +576,7 @@ export default function UploadScreen() {
     if (currentIndex < steps.length - 1) {
       setStep(steps[currentIndex + 1]);
     } else if (step === 'rights') {
+      // Rights is the last step for both flows → trigger upload
       if (uploadType === 'album') {
         handleAlbumUpload();
       } else {
@@ -596,14 +600,14 @@ export default function UploadScreen() {
   };
 
   const selectUploadType = (type: UploadType) => {
-    if (DEBUG_UPLOAD) Alert.alert('Upload Type', `Selected: ${type}`);
+    if (DEBUG_UPLOAD) pushDebugEvent(`Upload type: ${type}`);
     setUploadType(type);
     if (type === 'single') {
       setStep('audio');
-      if (DEBUG_UPLOAD) Alert.alert('Step Change', `step set to "audio" (was "type")`);
+      if (DEBUG_UPLOAD) pushDebugEvent('Step → audio');
     } else {
-      setStep('tracks');
-      if (DEBUG_UPLOAD) Alert.alert('Step Change', `step set to "tracks" (was "type")`);
+      setStep('album-info');
+      if (DEBUG_UPLOAD) pushDebugEvent('Step → album-info');
     }
   };
 
@@ -611,7 +615,7 @@ export default function UploadScreen() {
   if (!canUploadMusic) {
     return (
       <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ title: 'Upload Music', headerShown: true }} />
+        <Stack.Screen options={{ title: 'Upload', headerShown: false }} />
         <View style={styles.center}>
           <Ionicons name="cloud-upload-outline" size={64} color={theme.colors.textMuted} />
           <Text style={styles.emptyText}>Sign in to upload</Text>
@@ -625,7 +629,7 @@ export default function UploadScreen() {
   if (step === 'uploading') {
     return (
       <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ title: 'Uploading', headerShown: true, headerBackVisible: false }} />
+        <Stack.Screen options={{ title: 'Upload', headerShown: false }} />
         <View style={styles.center}>
           <View style={styles.uploadingIcon}>
             <Ionicons name="cloud-upload" size={48} color={theme.colors.primary} />
@@ -665,6 +669,16 @@ export default function UploadScreen() {
     );
   }
 
+  const stepLabels: Record<string, string> = {
+    metadata: 'Details',
+    'album-info': 'Details',
+    artwork: 'Artwork',
+    rights: 'Rights',
+    audio: 'Audio',
+    tracks: 'Files',
+    'track-details': 'Titles',
+  };
+
   const renderStepIndicator = () => {
     const steps = getCurrentSteps().filter(s => s !== 'type');
     const currentIndex = Math.max(0, getCurrentStepIndex() - 1); // Adjust for 'type' step
@@ -673,18 +687,26 @@ export default function UploadScreen() {
       <View style={styles.stepIndicator}>
         {steps.map((s, i) => (
           <View key={s} style={styles.stepRow}>
-            <View
-              style={[
-                styles.stepDot,
-                currentIndex === i && styles.stepDotActive,
-                currentIndex > i && styles.stepDotComplete,
-              ]}
-            >
-              {currentIndex > i ? (
-                <Ionicons name="checkmark" size={12} color="#fff" />
-              ) : (
-                <Text style={styles.stepNumber}>{i + 1}</Text>
-              )}
+            <View style={styles.stepCol}>
+              <View
+                style={[
+                  styles.stepDot,
+                  currentIndex === i && styles.stepDotActive,
+                  currentIndex > i && styles.stepDotComplete,
+                ]}
+              >
+                {currentIndex > i ? (
+                  <Ionicons name="checkmark" size={12} color="#fff" />
+                ) : (
+                  <Text style={styles.stepNumber}>{i + 1}</Text>
+                )}
+              </View>
+              <Text style={[
+                styles.stepLabel,
+                currentIndex === i && styles.stepLabelActive,
+              ]}>
+                {stepLabels[s] || s}
+              </Text>
             </View>
             {i < steps.length - 1 && <View style={styles.stepLine} />}
           </View>
@@ -697,21 +719,38 @@ export default function UploadScreen() {
     <SafeAreaView style={styles.container}>
       <Stack.Screen
         options={{
-          title: step === 'type' ? 'Upload' : uploadType === 'album' ? 'Upload Album' : 'Upload Track',
-          headerShown: true,
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-              <Ionicons name="close" size={24} color={theme.colors.textPrimary} />
-            </TouchableOpacity>
-          ),
+          title: 'Upload',
+          headerShown: false,
         }}
       />
+
+      {/* Custom header — avoids dynamic Stack.Screen options that cause modal remount */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+          <Ionicons name="close" size={24} color={theme.colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary }}>
+          {step === 'type' ? 'Upload' : uploadType === 'album' ? 'Upload Album' : 'Upload Track'}
+        </Text>
+        <View style={{ width: 32 }} />
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         {step !== 'type' && renderStepIndicator()}
+
+        {/* Debug event log (preview builds only) */}
+        {DEBUG_UPLOAD && debugEvents.length > 0 && (
+          <View style={{ backgroundColor: '#1a1a2e', borderBottomWidth: 1, borderColor: '#333', padding: 8, maxHeight: 80 }}>
+            <ScrollView nestedScrollEnabled>
+              {debugEvents.map((evt, i) => (
+                <Text key={i} style={{ color: '#0f0', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 10 }}>{evt}</Text>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           {/* Type Selection */}
@@ -768,18 +807,16 @@ export default function UploadScreen() {
                     <Text style={styles.typeDescription}>Upload one song at a time</Text>
                   </TouchableOpacity>
 
-                  <View
-                    style={[styles.typeCard, { opacity: 0.5 }]}
-                    pointerEvents="none"
+                  <TouchableOpacity
+                    style={styles.typeCard}
+                    onPress={() => selectUploadType('album')}
                   >
                     <View style={styles.typeIconContainer}>
-                      <Ionicons name="albums" size={32} color={theme.colors.textMuted} />
+                      <Ionicons name="albums" size={32} color={theme.colors.primary} />
                     </View>
                     <Text style={styles.typeTitle}>Album / EP</Text>
-                    <Text style={[styles.typeDescription, { color: theme.colors.textMuted }]}>
-                      Web only — use palletium.com
-                    </Text>
-                  </View>
+                    <Text style={styles.typeDescription}>Upload multiple tracks at once</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -1256,8 +1293,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.xl,
+  },
+  stepCol: {
+    alignItems: 'center',
+    flexDirection: 'column',
   },
   stepRow: {
     flexDirection: 'row',
@@ -1284,6 +1325,15 @@ const styles = StyleSheet.create({
   stepNumber: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.textMuted,
+    fontWeight: '600',
+  },
+  stepLabel: {
+    fontSize: 10,
+    color: theme.colors.textMuted,
+    marginTop: 4,
+  },
+  stepLabelActive: {
+    color: theme.colors.primary,
     fontWeight: '600',
   },
   stepLine: {

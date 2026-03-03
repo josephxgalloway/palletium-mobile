@@ -5,8 +5,7 @@ import {
   FlatList,
   StyleSheet,
   RefreshControl,
-  TouchableOpacity,
-  Image,
+  Pressable,
   ActivityIndicator,
   TextInput,
   ScrollView,
@@ -15,6 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import api from '@/lib/api/client';
 import { usePlayerStore } from '@/lib/store/playerStore';
 import { theme } from '@/constants/theme';
@@ -198,7 +199,6 @@ export default function DiscoverScreen() {
       const stationTracks = (response.data?.tracks || []).filter((t: any) => t.audio_url);
 
       if (stationTracks.length === 0) {
-        // Fallback to regular discovery if no analyzed tracks
         const fallbackResponse = await api.get('/discovery', { params: { limit: 20 } });
         const fallbackTracks = fallbackResponse.data?.tracks || fallbackResponse.data || [];
         setRadioTracks(shuffleArray(fallbackTracks));
@@ -207,7 +207,6 @@ export default function DiscoverScreen() {
       }
     } catch (err) {
       console.error('Failed to load station:', err);
-      // Fallback to regular discovery
       try {
         const fallbackResponse = await api.get('/discovery', { params: { limit: 20 } });
         const fallbackTracks = fallbackResponse.data?.tracks || fallbackResponse.data || [];
@@ -247,15 +246,14 @@ export default function DiscoverScreen() {
     const duration = getDuration(item);
 
     return (
-      <TouchableOpacity
+      <Pressable
         style={[styles.trackCard, isActive && styles.trackCardActive]}
         onPress={() => handleTrackPress(item)}
         onLongPress={() => navigateToTrack(item)}
-        activeOpacity={0.7}
       >
         <View style={styles.coverContainer}>
           {coverUrl ? (
-            <Image source={{ uri: coverUrl }} style={styles.cover} />
+            <Image source={{ uri: coverUrl }} style={styles.cover} transition={200} />
           ) : (
             <View style={[styles.cover, styles.coverPlaceholder]}>
               <Ionicons name="musical-note" size={24} color={theme.colors.textMuted} />
@@ -266,7 +264,7 @@ export default function DiscoverScreen() {
               <Ionicons
                 name={isPlaying ? 'pause' : 'play'}
                 size={20}
-                color={theme.colors.background}
+                color="#fff"
               />
             </View>
           )}
@@ -277,14 +275,15 @@ export default function DiscoverScreen() {
           <Text style={styles.trackArtist} numberOfLines={1}>{artistName}</Text>
           <View style={styles.trackMeta}>
             <Text style={styles.duration}>{formatDuration(duration)}</Text>
-            <Text style={styles.plays}>{item.play_count?.toLocaleString() || 0} plays</Text>
+            <View style={styles.metaDot} />
+            <Text style={styles.plays}>{(item.plays ?? item.play_count ?? 0).toLocaleString()} plays</Text>
           </View>
         </View>
 
-        <TouchableOpacity style={styles.moreButton} onPress={() => navigateToTrack(item)}>
+        <Pressable style={styles.moreButton} onPress={() => navigateToTrack(item)}>
           <Ionicons name="ellipsis-horizontal" size={20} color={theme.colors.textMuted} />
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </Pressable>
+      </Pressable>
     );
   };
 
@@ -292,11 +291,10 @@ export default function DiscoverScreen() {
     const isSelected = selectedStation?.id === station.id;
 
     return (
-      <TouchableOpacity
+      <Pressable
         key={station.id}
         style={[styles.stationCard, isSelected && styles.stationCardSelected]}
         onPress={() => loadStation(station)}
-        activeOpacity={0.8}
       >
         <LinearGradient
           colors={station.gradient}
@@ -308,12 +306,11 @@ export default function DiscoverScreen() {
         </LinearGradient>
         <Text style={styles.stationName}>{station.name}</Text>
         <Text style={styles.stationDescription} numberOfLines={1}>{station.description}</Text>
-      </TouchableOpacity>
+      </Pressable>
     );
   };
 
   const isSearchActive = searchQuery.trim().length > 0;
-  const displayTracks = isSearchActive ? searchResults : tracks;
 
   if (loading) {
     return (
@@ -328,61 +325,75 @@ export default function DiscoverScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Ambient gradient overlay */}
+      <LinearGradient
+        colors={['rgba(108,134,168,0.12)', 'transparent', 'rgba(108,134,168,0.06)']}
+        locations={[0, 0.4, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Discover</Text>
         <Text style={styles.subtitle}>Find new music, earn rewards</Text>
       </View>
 
-      {/* Search Bar */}
+      {/* Frosted Glass Search Bar */}
       <View style={styles.searchContainer}>
-        <View style={styles.searchInputWrapper}>
-          <Ionicons name="search" size={20} color={theme.colors.textMuted} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search tracks, artists..."
-            placeholderTextColor={theme.colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
+        <BlurView intensity={40} tint="dark" style={styles.searchBlur}>
+          <LinearGradient
+            colors={['rgba(27,31,43,0.7)', 'rgba(33,38,55,0.7)']}
+            style={StyleSheet.absoluteFill}
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={20} color={theme.colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
+          <View style={styles.searchInner}>
+            <Ionicons name="search" size={20} color={theme.colors.textMuted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search tracks, artists..."
+              placeholderTextColor={theme.colors.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                <Ionicons name="close-circle" size={20} color={theme.colors.textMuted} />
+              </Pressable>
+            )}
+          </View>
+        </BlurView>
       </View>
 
-      {/* Tab Navigation (only show when not searching) */}
+      {/* Tab Navigation */}
       {!isSearchActive && (
         <View style={styles.tabContainer}>
-          <TouchableOpacity
+          <Pressable
             style={[styles.tab, activeTab === 'browse' && styles.tabActive]}
             onPress={() => setActiveTab('browse')}
           >
             <Ionicons
               name="sparkles"
               size={16}
-              color={activeTab === 'browse' ? theme.colors.primary : theme.colors.textMuted}
+              color={activeTab === 'browse' ? '#fff' : theme.colors.textMuted}
             />
             <Text style={[styles.tabText, activeTab === 'browse' && styles.tabTextActive]}>
               Browse
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </Pressable>
+          <Pressable
             style={[styles.tab, activeTab === 'radio' && styles.tabActive]}
             onPress={() => setActiveTab('radio')}
           >
             <Ionicons
               name="radio"
               size={16}
-              color={activeTab === 'radio' ? theme.colors.primary : theme.colors.textMuted}
+              color={activeTab === 'radio' ? '#fff' : theme.colors.textMuted}
             />
             <Text style={[styles.tabText, activeTab === 'radio' && styles.tabTextActive]}>
               Mood Radio
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
 
@@ -396,7 +407,6 @@ export default function DiscoverScreen() {
 
       {/* Content */}
       {isSearchActive ? (
-        // Search Results
         <FlatList
           data={searchResults}
           keyExtractor={(item) => item.id.toString()}
@@ -417,15 +427,14 @@ export default function DiscoverScreen() {
           }
         />
       ) : activeTab === 'browse' ? (
-        // Browse Tab
         <>
           {error ? (
             <View style={styles.centered}>
               <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchTracks}>
+              <Pressable style={styles.retryButton} onPress={fetchTracks}>
                 <Text style={styles.retryText}>Try Again</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           ) : (
             <FlatList
@@ -465,6 +474,10 @@ export default function DiscoverScreen() {
           {/* Now Playing Section */}
           {selectedStation && (
             <View style={styles.nowPlayingSection}>
+              <LinearGradient
+                colors={['rgba(27,31,43,0.6)', 'rgba(33,38,55,0.6)']}
+                style={StyleSheet.absoluteFill}
+              />
               <View style={styles.nowPlayingHeader}>
                 <LinearGradient
                   colors={selectedStation.gradient}
@@ -480,13 +493,13 @@ export default function DiscoverScreen() {
                     {radioLoading ? 'Loading...' : `${radioTracks.length} tracks`}
                   </Text>
                 </View>
-                <TouchableOpacity
+                <Pressable
                   onPress={handleSkipNext}
                   style={styles.skipButton}
                   disabled={radioTracks.length === 0}
                 >
                   <Ionicons name="play-skip-forward" size={24} color={theme.colors.textPrimary} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
               {radioLoading ? (
@@ -501,14 +514,14 @@ export default function DiscoverScreen() {
                     const artistName = getArtistName(track);
 
                     return (
-                      <TouchableOpacity
+                      <Pressable
                         key={track.id}
                         style={[styles.radioTrackItem, isActive && styles.radioTrackItemActive]}
                         onPress={() => playRadioTrack(track, index)}
                       >
                         <Text style={styles.radioTrackIndex}>{index + 1}</Text>
                         {coverUrl ? (
-                          <Image source={{ uri: coverUrl }} style={styles.radioTrackCover} />
+                          <Image source={{ uri: coverUrl }} style={styles.radioTrackCover} transition={200} />
                         ) : (
                           <View style={[styles.radioTrackCover, styles.coverPlaceholder]}>
                             <Ionicons name="musical-note" size={16} color={theme.colors.textMuted} />
@@ -525,7 +538,7 @@ export default function DiscoverScreen() {
                             color={theme.colors.primary}
                           />
                         )}
-                      </TouchableOpacity>
+                      </Pressable>
                     );
                   })}
                 </View>
@@ -562,34 +575,36 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: theme.fontSize.xxxl,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
+    letterSpacing: 0.3,
   },
   subtitle: {
     fontSize: theme.fontSize.md,
     color: theme.colors.textSecondary,
     marginTop: theme.spacing.xs,
+    letterSpacing: 0.2,
   },
-  // Search
+  // Frosted Glass Search
   searchContainer: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.md,
   },
-  searchInputWrapper: {
+  searchBlur: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
+  },
+  searchInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
     paddingHorizontal: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  searchIcon: {
-    marginRight: theme.spacing.sm,
+    height: 48,
+    gap: theme.spacing.sm,
   },
   searchInput: {
     flex: 1,
-    height: 48,
     fontSize: theme.fontSize.md,
     color: theme.colors.textPrimary,
   },
@@ -607,33 +622,35 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.textSecondary,
   },
-  // Tabs
+  // Tabs — glass pill style
   tabContainer: {
     flexDirection: 'row',
     paddingHorizontal: theme.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing.md,
+    paddingVertical: 10,
     paddingHorizontal: theme.spacing.md,
-    marginRight: theme.spacing.md,
-    gap: theme.spacing.xs,
+    borderRadius: 20,
+    backgroundColor: 'rgba(192,200,214,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
+    gap: 6,
   },
   tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: theme.colors.primary,
+    backgroundColor: 'rgba(108,134,168,0.25)',
+    borderColor: 'rgba(192,200,214,0.15)',
   },
   tabText: {
-    fontSize: theme.fontSize.md,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.textMuted,
     fontWeight: '500',
   },
   tabTextActive: {
-    color: theme.colors.primary,
+    color: '#fff',
   },
   // Track List
   list: {
@@ -644,14 +661,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: 'rgba(27,31,43,0.6)',
+    borderRadius: 14,
     marginBottom: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
   },
   trackCardActive: {
-    backgroundColor: theme.colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
+    backgroundColor: 'rgba(108,134,168,0.15)',
+    borderColor: 'rgba(192,200,214,0.15)',
+    shadowColor: '#6c86a8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   coverContainer: {
     position: 'relative',
@@ -659,10 +681,12 @@ const styles = StyleSheet.create({
   cover: {
     width: 56,
     height: 56,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.1)',
   },
   coverPlaceholder: {
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -672,8 +696,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(232, 232, 232, 0.85)',
-    borderRadius: theme.borderRadius.md,
+    backgroundColor: 'rgba(108,134,168,0.7)',
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -683,8 +707,9 @@ const styles = StyleSheet.create({
   },
   trackTitle: {
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.semibold,
+    fontWeight: '600',
     color: theme.colors.textPrimary,
+    letterSpacing: 0.2,
   },
   trackArtist: {
     fontSize: theme.fontSize.sm,
@@ -696,6 +721,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: theme.spacing.xs,
   },
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: theme.colors.textMuted,
+    marginHorizontal: 8,
+  },
   duration: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.textMuted,
@@ -703,7 +735,6 @@ const styles = StyleSheet.create({
   plays: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.textMuted,
-    marginLeft: theme.spacing.md,
   },
   moreButton: {
     padding: theme.spacing.sm,
@@ -718,9 +749,10 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
     marginBottom: theme.spacing.md,
+    letterSpacing: 0.2,
   },
   stationGrid: {
     flexDirection: 'row',
@@ -730,28 +762,32 @@ const styles = StyleSheet.create({
   },
   stationCard: {
     width: '31%',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
+    backgroundColor: 'rgba(27,31,43,0.6)',
+    borderRadius: 14,
     padding: theme.spacing.md,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
   },
   stationCardSelected: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.surfaceElevated,
+    borderColor: 'rgba(192,200,214,0.2)',
+    backgroundColor: 'rgba(108,134,168,0.15)',
+    shadowColor: '#6c86a8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   stationGradient: {
     width: 48,
     height: 48,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: theme.spacing.sm,
   },
   stationName: {
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
     textAlign: 'center',
   },
@@ -762,10 +798,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   nowPlayingSection: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 16,
     padding: theme.spacing.md,
     marginBottom: theme.spacing.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
   },
   nowPlayingHeader: {
     flexDirection: 'row',
@@ -775,7 +813,7 @@ const styles = StyleSheet.create({
   nowPlayingIcon: {
     width: 40,
     height: 40,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -785,7 +823,7 @@ const styles = StyleSheet.create({
   },
   nowPlayingTitle: {
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
   },
   nowPlayingCount: {
@@ -807,10 +845,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.sm,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 10,
   },
   radioTrackItemActive: {
-    backgroundColor: theme.colors.surfaceElevated,
+    backgroundColor: 'rgba(108,134,168,0.15)',
   },
   radioTrackIndex: {
     width: 24,
@@ -821,8 +859,10 @@ const styles = StyleSheet.create({
   radioTrackCover: {
     width: 40,
     height: 40,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 8,
     marginRight: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
   },
   radioTrackInfo: {
     flex: 1,
@@ -847,10 +887,12 @@ const styles = StyleSheet.create({
   infoCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
+    backgroundColor: 'rgba(27,31,43,0.6)',
+    borderRadius: 14,
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
   },
   infoText: {
     flex: 1,
@@ -889,11 +931,13 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.lg,
     paddingHorizontal: theme.spacing.xl,
     paddingVertical: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: 'rgba(108,134,168,0.15)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.1)',
   },
   retryText: {
     color: theme.colors.primary,
-    fontWeight: theme.fontWeight.semibold,
+    fontWeight: '600',
   },
 });

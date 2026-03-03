@@ -1,8 +1,12 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, Share, ActionSheetIOS, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Dimensions, Share, ActionSheetIOS, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Slider from '@react-native-community/slider';
+import { Image } from 'expo-image';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { usePlayerStore } from '@/lib/store/playerStore';
 import { useTrackProgress } from '@/hooks/useTrackProgress';
 import { theme } from '@/constants/theme';
@@ -11,19 +15,30 @@ import { useState, useEffect } from 'react';
 import { likeTrack, unlikeTrack, getTrackInteraction } from '@/lib/api/client';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useFloat, useGlow, usePressScale } from '@/hooks/usePlayerAnimations';
+import ProgressSlider from '@/components/player/ProgressSlider';
+import EarningsTicker from '@/components/player/EarningsTicker';
 
 const { width } = Dimensions.get('window');
-const ARTWORK_SIZE = width - 80;
+const ARTWORK_SIZE = width - 56;
 
 export default function PlayerScreen() {
-  const { currentTrack, pause, resume, seekTo, skipNext, skipPrevious, queue } = usePlayerStore();
+  const { currentTrack, pause, resume, seekTo, skipNext, skipPrevious, queue, isPreviewMode } = usePlayerStore();
   const { position, duration, isPlaying, isBuffering } = useTrackProgress();
   const { isAuthenticated } = useAuthStore();
   const [isLiked, setIsLiked] = useState(false);
   const [isShuffleOn, setIsShuffleOn] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
 
-  // Fetch like status when track changes
+  // Animation hooks
+  const floatStyle = useFloat(isPlaying);
+  const glowStyle = useGlow(isPlaying);
+  const playPress = usePressScale(Haptics.ImpactFeedbackStyle.Medium);
+  const skipPrevPress = usePressScale();
+  const skipNextPress = usePressScale();
+  const likePress = usePressScale();
+  const sharePress = usePressScale();
+
   useEffect(() => {
     if (currentTrack && isAuthenticated) {
       getTrackInteraction(currentTrack.id)
@@ -37,7 +52,6 @@ export default function PlayerScreen() {
       Toast.show({ type: 'info', text1: 'Sign in to like tracks' });
       return;
     }
-
     try {
       if (isLiked) {
         await unlikeTrack(currentTrack.id);
@@ -55,10 +69,9 @@ export default function PlayerScreen() {
 
   const handleShare = async () => {
     if (!currentTrack) return;
-
     try {
       await Share.share({
-        message: `Check out "${currentTrack.title}" by ${getArtistName(currentTrack)} on Palletium! 🎵`,
+        message: `Check out "${currentTrack.title}" by ${getArtistName(currentTrack)} on Palletium!`,
         url: `https://palletium.com/track/${currentTrack.id}`,
       });
     } catch (error) {
@@ -68,14 +81,11 @@ export default function PlayerScreen() {
 
   const handleViewArtist = () => {
     if (!currentTrack) return;
-
     const artistId = currentTrack.artist_id;
     if (!artistId) {
-      Toast.show({ type: 'error', text1: 'Artist not found', text2: 'Unable to load artist profile' });
+      Toast.show({ type: 'error', text1: 'Artist not found' });
       return;
     }
-
-    // Close the player modal first, then navigate
     router.back();
     setTimeout(() => {
       router.push(`/artist/${artistId}` as any);
@@ -84,11 +94,9 @@ export default function PlayerScreen() {
 
   const showMenu = () => {
     const options = ['Share Track', 'View Artist', 'Add to Playlist', 'Cancel'];
-    const cancelButtonIndex = 3;
-
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
-        { options, cancelButtonIndex },
+        { options, cancelButtonIndex: 3 },
         (buttonIndex) => {
           if (buttonIndex === 0) handleShare();
           if (buttonIndex === 1) handleViewArtist();
@@ -98,28 +106,22 @@ export default function PlayerScreen() {
         }
       );
     } else {
-      // Android - simple menu
       handleShare();
     }
   };
 
   const toggleShuffle = () => {
     setIsShuffleOn(!isShuffleOn);
-    Toast.show({
-      type: 'info',
-      text1: isShuffleOn ? 'Shuffle Off' : 'Shuffle On',
-      visibilityTime: 1500,
-    });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Toast.show({ type: 'info', text1: isShuffleOn ? 'Shuffle Off' : 'Shuffle On', visibilityTime: 1500 });
   };
 
   const toggleRepeat = () => {
     const modes: Array<'off' | 'all' | 'one'> = ['off', 'all', 'one'];
-    const currentIndex = modes.indexOf(repeatMode);
-    const nextMode = modes[(currentIndex + 1) % modes.length];
+    const nextMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
     setRepeatMode(nextMode);
-
-    const messages = { off: 'Repeat Off', all: 'Repeat All', one: 'Repeat One' };
-    Toast.show({ type: 'info', text1: messages[nextMode], visibilityTime: 1500 });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Toast.show({ type: 'info', text1: { off: 'Repeat Off', all: 'Repeat All', one: 'Repeat One' }[nextMode], visibilityTime: 1500 });
   };
 
   const handleSkipNext = async () => {
@@ -131,7 +133,6 @@ export default function PlayerScreen() {
   };
 
   const handleSkipPrevious = async () => {
-    // If position > 3 seconds, restart current track
     if (position > 3) {
       await seekTo(0);
       return;
@@ -139,151 +140,216 @@ export default function PlayerScreen() {
     await skipPrevious();
   };
 
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      pause();
+    } else {
+      resume();
+    }
+  };
+
   if (!currentTrack) {
     return (
       <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['rgba(108, 134, 168, 0.15)', 'transparent', 'rgba(108, 134, 168, 0.08)']}
+          locations={[0, 0.5, 1]}
+          start={{ x: 0.3, y: 0 }}
+          end={{ x: 0.7, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-            <Ionicons name="chevron-down" size={28} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
+          <Pressable onPress={() => router.back()} style={styles.headerButton}>
+            <Ionicons name="chevron-down" size={24} color={theme.colors.textPrimary} />
+          </Pressable>
         </View>
         <View style={styles.emptyState}>
+          <Ionicons name="musical-notes" size={48} color={theme.colors.textMuted} />
           <Text style={styles.emptyText}>No track playing</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleSeek = async (value: number) => {
-    await seekTo(value);
-  };
-
   const coverUrl = getCoverUrl(currentTrack);
   const artistName = getArtistName(currentTrack);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* Layered ambient gradient background */}
+      <LinearGradient
+        colors={['rgba(108, 134, 168, 0.15)', 'transparent', 'rgba(108, 134, 168, 0.08)']}
+        locations={[0, 0.5, 1]}
+        start={{ x: 0.3, y: 0 }}
+        end={{ x: 0.7, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {/* Top vignette for header readability */}
+      <LinearGradient
+        colors={['rgba(22, 25, 34, 0.8)', 'transparent']}
+        style={styles.topVignette}
+      />
+
+      {/* Header — drag pill + close/menu */}
+      <View style={styles.dragPillContainer}>
+        <View style={styles.dragPill} />
+      </View>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-          <Ionicons name="chevron-down" size={28} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Now Playing</Text>
-        <TouchableOpacity style={styles.menuButton} onPress={showMenu}>
-          <Ionicons name="ellipsis-horizontal" size={24} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
+        <Pressable onPress={() => router.back()} style={styles.headerButton}>
+          <Ionicons name="chevron-down" size={24} color={theme.colors.textPrimary} />
+        </Pressable>
+        <Pressable style={styles.headerButton} onPress={showMenu}>
+          <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.textPrimary} />
+        </Pressable>
       </View>
 
-      {/* Artwork */}
+      {/* Floating artwork */}
       <View style={styles.artworkContainer}>
-        {coverUrl ? (
-          <Image
-            source={{ uri: coverUrl }}
-            style={styles.artwork}
-          />
-        ) : (
-          <View style={[styles.artwork, styles.artworkPlaceholder]}>
-            <Ionicons name="musical-note" size={80} color={theme.colors.textMuted} />
-          </View>
-        )}
+        <Animated.View style={[styles.artworkShadow, floatStyle]}>
+          {coverUrl ? (
+            <Image
+              source={{ uri: coverUrl }}
+              style={styles.artwork}
+              transition={300}
+            />
+          ) : (
+            <View style={[styles.artwork, styles.artworkPlaceholder]}>
+              <Ionicons name="musical-note" size={80} color={theme.colors.textMuted} />
+            </View>
+          )}
+        </Animated.View>
       </View>
 
-      {/* Track Info */}
+      {/* Track info */}
       <View style={styles.trackInfo}>
-        <Text style={styles.title} numberOfLines={1}>{currentTrack.title}</Text>
+        <Text style={styles.title} numberOfLines={2}>{currentTrack.title}</Text>
         <Text style={styles.artist} numberOfLines={1}>{artistName}</Text>
       </View>
 
-      {/* Progress Bar */}
-      <View style={styles.progressSection}>
-        <Slider
-          style={styles.slider}
-          minimumValue={0}
-          maximumValue={duration}
-          value={position}
-          onSlidingComplete={handleSeek}
-          minimumTrackTintColor={theme.colors.primary}
-          maximumTrackTintColor={theme.colors.border}
-          thumbTintColor={theme.colors.primary}
-        />
-        <View style={styles.timeContainer}>
-          <Text style={styles.time}>{formatTime(position)}</Text>
-          <Text style={styles.time}>{formatTime(duration)}</Text>
-        </View>
-      </View>
+      {/* Earnings ticker — appears when 30s settlement fires */}
+      <EarningsTicker />
 
-      {/* Like Button Row */}
+      {/* Like / Share row */}
       <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-          <Ionicons
-            name={isLiked ? 'heart' : 'heart-outline'}
-            size={28}
-            color={isLiked ? theme.colors.error : theme.colors.textSecondary}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-          <Ionicons name="share-outline" size={26} color={theme.colors.textSecondary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Controls */}
-      <View style={styles.controls}>
-        <TouchableOpacity style={styles.secondaryControl} onPress={toggleShuffle}>
-          <Ionicons
-            name="shuffle"
-            size={24}
-            color={isShuffleOn ? theme.colors.primary : theme.colors.textMuted}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.skipControl} onPress={handleSkipPrevious}>
-          <Ionicons name="play-skip-back" size={32} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.playControl}
-          onPress={isPlaying ? pause : resume}
-        >
-          {isBuffering ? (
-            <Ionicons name="hourglass" size={36} color={theme.colors.background} />
-          ) : (
+        <Animated.View style={likePress.animStyle}>
+          <Pressable
+            style={styles.actionButton}
+            onPress={handleLike}
+            onPressIn={likePress.onPressIn}
+            onPressOut={likePress.onPressOut}
+          >
             <Ionicons
-              name={isPlaying ? 'pause' : 'play'}
-              size={36}
-              color={theme.colors.background}
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={24}
+              color={isLiked ? '#F87171' : theme.colors.textSecondary}
             />
-          )}
-        </TouchableOpacity>
+          </Pressable>
+        </Animated.View>
+        <Animated.View style={sharePress.animStyle}>
+          <Pressable
+            style={styles.actionButton}
+            onPress={handleShare}
+            onPressIn={sharePress.onPressIn}
+            onPressOut={sharePress.onPressOut}
+          >
+            <Ionicons name="share-outline" size={22} color={theme.colors.textSecondary} />
+          </Pressable>
+        </Animated.View>
+      </View>
 
-        <TouchableOpacity style={styles.skipControl} onPress={handleSkipNext}>
-          <Ionicons name="play-skip-forward" size={32} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
+      {/* Custom progress slider */}
+      <ProgressSlider
+        position={position}
+        duration={duration}
+        onSeek={seekTo}
+        disabled={isPreviewMode}
+      />
 
-        <TouchableOpacity style={styles.secondaryControl} onPress={toggleRepeat}>
-          <Ionicons
-            name={repeatMode === 'one' ? 'repeat' : 'repeat'}
-            size={24}
-            color={repeatMode !== 'off' ? theme.colors.primary : theme.colors.textMuted}
+      {/* Glass control panel */}
+      <View style={styles.controlsPanelContainer}>
+        <BlurView intensity={40} tint="dark" style={styles.controlsPanel}>
+          <LinearGradient
+            colors={['rgba(33, 38, 55, 0.4)', 'rgba(27, 31, 43, 0.4)']}
+            style={StyleSheet.absoluteFill}
           />
-          {repeatMode === 'one' && (
-            <Text style={styles.repeatOneIndicator}>1</Text>
-          )}
-        </TouchableOpacity>
+          <View style={styles.controls}>
+            {/* Shuffle */}
+            <Pressable style={styles.secondaryControl} onPress={toggleShuffle}>
+              <Ionicons
+                name="shuffle"
+                size={22}
+                color={isShuffleOn ? theme.colors.primary : 'rgba(101, 112, 138, 0.6)'}
+              />
+              {isShuffleOn && <View style={styles.activeIndicator} />}
+            </Pressable>
+
+            {/* Skip Previous */}
+            <Animated.View style={skipPrevPress.animStyle}>
+              <Pressable
+                style={styles.skipControl}
+                onPress={handleSkipPrevious}
+                onPressIn={skipPrevPress.onPressIn}
+                onPressOut={skipPrevPress.onPressOut}
+              >
+                <Ionicons name="play-skip-back" size={28} color={theme.colors.textPrimary} />
+              </Pressable>
+            </Animated.View>
+
+            {/* Play/Pause — gradient circle with glow */}
+            <Animated.View style={[styles.playControlOuter, glowStyle]}>
+              <Animated.View style={playPress.animStyle}>
+                <Pressable
+                  onPress={handlePlayPause}
+                  onPressIn={playPress.onPressIn}
+                  onPressOut={playPress.onPressOut}
+                >
+                  <LinearGradient
+                    colors={['#c0c8d6', '#9ba8bc']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.playControl}
+                  >
+                    {isBuffering ? (
+                      <Ionicons name="hourglass" size={34} color={theme.colors.background} />
+                    ) : (
+                      <Ionicons
+                        name={isPlaying ? 'pause' : 'play'}
+                        size={34}
+                        color={theme.colors.background}
+                      />
+                    )}
+                  </LinearGradient>
+                </Pressable>
+              </Animated.View>
+            </Animated.View>
+
+            {/* Skip Next */}
+            <Animated.View style={skipNextPress.animStyle}>
+              <Pressable
+                style={styles.skipControl}
+                onPress={handleSkipNext}
+                onPressIn={skipNextPress.onPressIn}
+                onPressOut={skipNextPress.onPressOut}
+              >
+                <Ionicons name="play-skip-forward" size={28} color={theme.colors.textPrimary} />
+              </Pressable>
+            </Animated.View>
+
+            {/* Repeat */}
+            <Pressable style={styles.secondaryControl} onPress={toggleRepeat}>
+              <Ionicons
+                name="repeat"
+                size={22}
+                color={repeatMode !== 'off' ? theme.colors.primary : 'rgba(101, 112, 138, 0.6)'}
+              />
+              {repeatMode === 'one' && <Text style={styles.repeatOneIndicator}>1</Text>}
+              {repeatMode !== 'off' && <View style={styles.activeIndicator} />}
+            </Pressable>
+          </View>
+        </BlurView>
       </View>
 
-      {/* Payment indicator */}
-      <View style={styles.paymentInfo}>
-        <Ionicons name="cash" size={16} color={theme.colors.success} />
-        <Text style={styles.paymentText}>
-          Payment triggers after 30 seconds
-        </Text>
-      </View>
+      <View style={{ flex: 1 }} />
     </SafeAreaView>
   );
 }
@@ -293,40 +359,58 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  topVignette: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 200,
+    zIndex: 1,
+  },
+  dragPillContainer: {
+    alignItems: 'center',
+    paddingTop: 8,
+    zIndex: 2,
+  },
+  dragPill: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(192, 200, 214, 0.3)',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    zIndex: 2,
   },
-  closeButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  menuButton: {
-    width: 44,
-    height: 44,
+  headerButton: {
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
   artworkContainer: {
     alignItems: 'center',
-    paddingVertical: theme.spacing.xl,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  artworkShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(192, 200, 214, 0.08)',
   },
   artwork: {
     width: ARTWORK_SIZE,
     height: ARTWORK_SIZE,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 16,
   },
   artworkPlaceholder: {
     backgroundColor: theme.colors.surface,
@@ -335,104 +419,107 @@ const styles = StyleSheet.create({
   },
   trackInfo: {
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.xl,
+    paddingHorizontal: 32,
+    marginBottom: 12,
   },
   title: {
-    fontSize: theme.fontSize.xxl,
-    fontWeight: theme.fontWeight.bold,
+    fontSize: 26,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   artist: {
-    fontSize: theme.fontSize.lg,
+    fontSize: 16,
     color: theme.colors.textSecondary,
-    marginTop: theme.spacing.xs,
+    marginTop: 6,
     textAlign: 'center',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: theme.spacing.xl,
-    paddingVertical: theme.spacing.md,
+    gap: 32,
+    marginBottom: 20,
   },
   actionButton: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  progressSection: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
+  controlsPanelContainer: {
+    marginHorizontal: 24,
+    marginTop: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192, 200, 214, 0.06)',
   },
-  slider: {
-    width: '100%',
-    height: 40,
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.xs,
-  },
-  time: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.textMuted,
+  controlsPanel: {
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: theme.spacing.xl,
-    gap: theme.spacing.lg,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    gap: 16,
   },
   secondaryControl: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.primary,
   },
   repeatOneIndicator: {
     position: 'absolute',
-    bottom: 4,
+    top: 2,
     right: 4,
-    fontSize: 10,
-    fontWeight: 'bold',
+    fontSize: 9,
+    fontWeight: '700',
     color: theme.colors.primary,
   },
   skipControl: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  playControlOuter: {
+    shadowColor: '#c0c8d6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 6,
+    borderRadius: 36,
   },
   playControl: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  paymentInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.xs,
-    paddingVertical: theme.spacing.md,
-  },
-  paymentText: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.success,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
   },
   emptyText: {
     color: theme.colors.textMuted,
-    fontSize: theme.fontSize.md,
+    fontSize: 16,
   },
 });

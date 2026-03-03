@@ -6,6 +6,7 @@ import { useNetworkStore } from '@/lib/store/networkStore';
 import type { DashboardStats } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -22,13 +23,12 @@ import {
   ActionSheetIOS,
   ActivityIndicator,
   Alert,
-  Image,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -59,7 +59,6 @@ export default function ProfileScreen() {
         }
       );
     } else {
-      // Android - show alert with options
       Alert.alert('Change Profile Photo', 'Select an option', [
         { text: 'Take Photo', onPress: () => pickImage('camera') },
         { text: 'Choose from Library', onPress: () => pickImage('library') },
@@ -79,7 +78,6 @@ export default function ProfileScreen() {
     }
 
     try {
-      // Request permissions
       if (source === 'camera') {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
@@ -117,7 +115,6 @@ export default function ProfileScreen() {
   const uploadProfilePhoto = async (uri: string) => {
     setUploadingPhoto(true);
     try {
-      // Create form data for upload
       const formData = new FormData();
       const filename = uri.split('/').pop() || 'photo.jpg';
       const match = /\.(\w+)$/.exec(filename);
@@ -135,7 +132,6 @@ export default function ProfileScreen() {
         },
       });
 
-      // Update local user state with new image URL
       if (response.data?.profile_image_url) {
         updateUser({ profile_image: response.data.profile_image_url });
         Toast.show({ type: 'success', text1: 'Profile photo updated!' });
@@ -153,15 +149,11 @@ export default function ProfileScreen() {
     if (!isAuthenticated || !isConnected) return;
 
     try {
-      // For artists, use the same analytics endpoint as the web platform
-      // This ensures data consistency - analytics returns values in DOLLARS
       if (user?.type === 'artist' && user?.id) {
         try {
           const analyticsResponse = await api.get(`/analytics/artist/${user.id}/overview`);
           const analyticsData = analyticsResponse.data;
-          console.log('Profile - Artist analytics response:', JSON.stringify(analyticsData, null, 2));
 
-          // Analytics endpoint returns values in DOLLARS
           const normalizedStats: DashboardStats = {
             total_earnings: analyticsData.totalEarnings || 0,
             pending_earnings: analyticsData.pendingEarnings || 0,
@@ -172,10 +164,8 @@ export default function ProfileScreen() {
             monthly_revenue: analyticsData.monthlyEarnings || 0,
           };
 
-          console.log('Profile - Normalized artist stats:', JSON.stringify(normalizedStats, null, 2));
           setStats(normalizedStats);
 
-          // Also fetch track count for accurate display
           try {
             const tracksData = await getArtistTracks(user.id);
             let tracks: any[] = [];
@@ -197,14 +187,8 @@ export default function ProfileScreen() {
         }
       }
 
-      // Fallback: fetch from dashboard (for listeners and if analytics fails)
       const response = await api.get('/users/dashboard');
-      console.log('Profile - Dashboard response:', JSON.stringify(response.data, null, 2));
-
-      // Handle wrapped response: { stats: {...} } or direct {...}
       const dashboardData = response.data?.stats || response.data;
-
-      // Dashboard returns revenue values in cents — always divide by 100
       const rawEarnings = dashboardData.total_earnings ?? dashboardData.total_revenue ?? 0;
       const rawPending = dashboardData.pending_earnings ?? dashboardData.pending_revenue ?? 0;
 
@@ -215,10 +199,8 @@ export default function ProfileScreen() {
         track_count: dashboardData.track_count ?? dashboardData.total_tracks ?? 0,
       };
 
-      console.log('Profile - Normalized stats:', JSON.stringify(normalizedStats, null, 2));
       setStats(normalizedStats);
 
-      // For artists fallback, fetch track count
       if (user?.type === 'artist' && user?.id) {
         try {
           const tracksData = await getArtistTracks(user.id);
@@ -261,7 +243,6 @@ export default function ProfileScreen() {
   };
 
   const handleHelpSupport = () => {
-    // Navigate to settings page - support/FAQ available there
     router.push('/settings' as any);
   };
 
@@ -269,24 +250,36 @@ export default function ProfileScreen() {
   if (!isAuthenticated || !user) {
     return (
       <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['rgba(108,134,168,0.15)', 'transparent']}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
         <View style={styles.authPrompt}>
-          <Ionicons name="person-circle-outline" size={80} color={theme.colors.textMuted} />
+          <View style={styles.authIconRing}>
+            <Ionicons name="person-circle-outline" size={60} color={theme.colors.textMuted} />
+          </View>
           <Text style={styles.authTitle}>Sign in to Palletium</Text>
           <Text style={styles.authSubtitle}>
             Track your earnings, rewards, and listening history
           </Text>
-          <TouchableOpacity
+          <Pressable
             style={styles.signInButton}
             onPress={() => router.push('/(auth)/login')}
           >
-            <Text style={styles.signInText}>Sign In</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+            <LinearGradient
+              colors={['#c0c8d6', '#9ba8bc']}
+              style={styles.signInGradient}
+            >
+              <Text style={styles.signInText}>Sign In</Text>
+            </LinearGradient>
+          </Pressable>
+          <Pressable
             style={styles.registerButton}
             onPress={() => router.push('/(auth)/register')}
           >
             <Text style={styles.registerText}>Create Account</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -297,6 +290,14 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Ambient gradient */}
+      <LinearGradient
+        colors={['rgba(108,134,168,0.15)', 'transparent', 'rgba(108,134,168,0.06)']}
+        locations={[0, 0.35, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -315,27 +316,32 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Profile Header */}
+        {/* Profile Header with Glow */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleChangePhoto} disabled={uploadingPhoto} style={styles.avatarContainer}>
-            {user.profile_image ? (
-              <Image source={{ uri: user.profile_image }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarText}>
-                  {user.name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
+          <Pressable onPress={handleChangePhoto} disabled={uploadingPhoto} style={styles.avatarContainer}>
+            <View style={styles.avatarGlow}>
+              {user.profile_image ? (
+                <Image source={{ uri: user.profile_image }} style={styles.avatar} transition={300} />
+              ) : (
+                <LinearGradient
+                  colors={['rgba(108,134,168,0.3)', 'rgba(192,200,214,0.2)']}
+                  style={[styles.avatar, styles.avatarPlaceholder]}
+                >
+                  <Text style={styles.avatarText}>
+                    {user.name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
+                  </Text>
+                </LinearGradient>
+              )}
+            </View>
             {/* Camera icon overlay */}
             <View style={styles.cameraIconContainer}>
               {uploadingPhoto ? (
-                <ActivityIndicator size="small" color={theme.colors.textPrimary} />
+                <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Ionicons name="camera" size={16} color={theme.colors.textPrimary} />
+                <Ionicons name="camera" size={14} color="#fff" />
               )}
             </View>
-          </TouchableOpacity>
+          </Pressable>
           <Text style={styles.name}>{user.name || 'Palletium User'}</Text>
           <Text style={styles.email}>{user.email}</Text>
           <View style={styles.badge}>
@@ -351,217 +357,304 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Prominent Earnings/Rewards Button (hidden for admins) */}
-            {!loading && !isAdmin && (
-              <TouchableOpacity
-                style={styles.earningsButton}
-                onPress={() => router.push(isArtist ? '/stats/earnings' : '/(tabs)/rewards' as any)}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={[theme.colors.success, '#228B22']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.earningsButtonGradient}
-                >
-                  <View style={styles.earningsIconContainer}>
-                    <Ionicons name={isArtist ? 'cash' : 'gift'} size={28} color="#fff" />
-                  </View>
-                  <View style={styles.earningsTextContainer}>
-                    <Text style={styles.earningsLabel}>
-                      {isArtist ? 'Your Earnings' : 'Your Rewards'}
-                    </Text>
-                    <Text style={styles.earningsValue}>
-                      ${isArtist
-                        ? (stats?.total_earnings || 0).toFixed(2)
-                        : (stats?.total_rewards || 0).toFixed(2)
-                      }
-                    </Text>
-                  </View>
-                  <View style={styles.earningsArrow}>
-                    <Text style={styles.viewDetailsText}>View Details</Text>
-                    <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
-                  </View>
-                </LinearGradient>
-                {/* Pending badge for artists */}
-                {isArtist && (stats?.pending_earnings || 0) > 0 && (
-                  <View style={styles.pendingBadge}>
-                    <Text style={styles.pendingBadgeText}>
-                      ${(stats?.pending_earnings || 0).toFixed(2)} pending
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            )}
-
-            {/* Stats Grid (hidden for admins) */}
-            {loading ? (
-              <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />
-            ) : !isAdmin ? (
-              <View style={styles.statsGrid}>
-                {isArtist ? (
-                  <>
-                    <StatCard
-                      icon="play"
-                      label="Total Plays"
-                      value={formatNumber(stats?.total_plays || 0)}
-                      color={theme.colors.primary}
-                    />
-                    <StatCard
-                      icon="people"
-                      label="Listeners"
-                      value={formatNumber(stats?.unique_listeners || 0)}
-                      color={theme.colors.accent}
-                    />
-                    <StatCard
-                      icon="musical-note"
-                      label="Tracks"
-                      value={trackCount > 0 ? trackCount.toString() : (stats?.track_count?.toString() || '0')}
-                      color={theme.colors.primary}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <StatCard
-                      icon="compass"
-                      label="Discoveries"
-                      value={formatNumber(stats?.discovery_count || 0)}
-                      color={theme.colors.accent}
-                    />
-                    <StatCard
-                      icon="play"
-                      label="Plays"
-                      value={formatNumber(stats?.play_count || 0)}
-                      color={theme.colors.primary}
-                    />
-                    <StatCard
-                      icon="trophy"
-                      label="Tier"
-                      value={stats?.current_tier || 'Bronze'}
-                      color={theme.colors.accent}
-                    />
-                    {/* XP is gated at 500 users - hidden until Season Pass unlocks */}
-                  </>
-                )}
+        {/* Prominent Earnings/Rewards Button */}
+        {!loading && !isAdmin && (
+          <Pressable
+            style={styles.earningsButton}
+            onPress={() => router.push(isArtist ? '/stats/earnings' : '/(tabs)/rewards' as any)}
+          >
+            <LinearGradient
+              colors={isArtist ? ['#6c86a8', '#4a6a8a'] : ['#6c86a8', '#4a6a8a']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.earningsButtonGradient}
+            >
+              <View style={styles.earningsIconContainer}>
+                <Ionicons name={isArtist ? 'cash' : 'gift'} size={28} color="#fff" />
               </View>
-            ) : null}
-
-            {/* Analytics Section (hidden for admins) */}
-            {!isArtist && !isAdmin && !loading && (
-              <TouchableOpacity
-                style={styles.analyticsButton}
-                onPress={() => router.push('/insights/taste' as any)}
-              >
-                <View style={styles.analyticsContent}>
-                  <View style={styles.analyticsIconContainer}>
-                    <Ionicons name="trending-up" size={24} color={theme.colors.accent} />
-                  </View>
-                  <View style={styles.analyticsTextContainer}>
-                    <Text style={styles.analyticsTitle}>Taste Evolution</Text>
-                    <Text style={styles.analyticsSubtitle}>See how your music taste has changed</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
-                </View>
-              </TouchableOpacity>
+              <View style={styles.earningsTextContainer}>
+                <Text style={styles.earningsLabel}>
+                  {isArtist ? 'Your Earnings' : 'Your Rewards'}
+                </Text>
+                <Text style={styles.earningsValue}>
+                  ${isArtist
+                    ? (stats?.total_earnings || 0).toFixed(2)
+                    : (stats?.total_rewards || 0).toFixed(2)
+                  }
+                </Text>
+              </View>
+              <View style={styles.earningsArrow}>
+                <Text style={styles.viewDetailsText}>View Details</Text>
+                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
+              </View>
+            </LinearGradient>
+            {/* Pending badge for artists */}
+            {isArtist && (stats?.pending_earnings || 0) > 0 && (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingBadgeText}>
+                  ${(stats?.pending_earnings || 0).toFixed(2)} pending
+                </Text>
+              </View>
             )}
+          </Pressable>
+        )}
 
-            {/* Upload Music CTA for listeners (hidden for admins) */}
-            {!isArtist && !isAdmin && !loading && (
-              <TouchableOpacity
-                style={styles.analyticsButton}
-                onPress={() => router.push('/upload' as any)}
-              >
-                <View style={styles.analyticsContent}>
-                  <View style={[styles.analyticsIconContainer, { backgroundColor: 'rgba(184, 134, 11, 0.15)' }]}>
-                    <Ionicons name="cloud-upload" size={24} color={theme.colors.primary} />
-                  </View>
-                  <View style={styles.analyticsTextContainer}>
-                    <Text style={styles.analyticsTitle}>Upload Music</Text>
-                    <Text style={styles.analyticsSubtitle}>Start sharing your own tracks</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
-                </View>
-              </TouchableOpacity>
-            )}
-
-            {/* Admin Dashboard (Admin only) */}
-            {(user.is_admin || user.type === 'admin') && !loading && (
-              <TouchableOpacity
-                style={styles.adminButton}
-                onPress={() => router.push('/admin' as any)}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={['#DC2626', '#991B1B']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.journeyButtonGradient}
-                >
-                  <View style={[styles.journeyIconContainer, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                    <Ionicons name="shield-checkmark" size={24} color="#fff" />
-                  </View>
-                  <View style={styles.journeyTextContainer}>
-                    <Text style={[styles.journeyButtonTitle, { color: '#fff' }]}>Admin Dashboard</Text>
-                    <Text style={[styles.journeyButtonSubtitle, { color: 'rgba(255,255,255,0.7)' }]}>
-                      Platform stats & management
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#fff" />
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-
-            {/* Menu Items */}
-            <View style={styles.menu}>
-              <MenuItem
-                icon="settings-outline"
-                label="Settings"
-                onPress={() => router.push('/settings' as any)}
-              />
-              {!isAdmin && (
-                <MenuItem
-                  icon="card-outline"
-                  label="Subscription"
-                  sublabel={user.subscription_status === 'active' ? 'Premium' : 'Free'}
-                  onPress={() => router.push('/settings/subscription' as any)}
-                />
+        {/* Payout Progress — Artist */}
+        {isArtist && !isAdmin && !loading && (
+          <View style={styles.payoutCard}>
+            <LinearGradient
+              colors={['rgba(27,31,43,0.6)', 'rgba(33,38,55,0.6)']}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.payoutHeader}>
+              {isVerifiedArtist ? (
+                <>
+                  <Ionicons name="shield-checkmark" size={16} color={theme.colors.success} />
+                  <Text style={styles.payoutTitle}>Verified — Dynasty Tier</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="alert-circle" size={16} color={theme.colors.warning} />
+                  <Text style={styles.payoutTitle}>Unverified — AI Tier ($0.004/play)</Text>
+                </>
               )}
-              <MenuItem
-                icon="help-circle-outline"
-                label="Help & Support"
-                onPress={handleHelpSupport}
-              />
-              <MenuItem
-                icon="information-circle-outline"
-                label="About"
-                onPress={() => router.push({ pathname: '/settings/legal', params: { type: 'terms' } } as any)}
+            </View>
+            <View style={styles.progressTrack}>
+              <LinearGradient
+                colors={['#6c86a8', '#c0c8d6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.min(((stats?.total_earnings || 0) / 50) * 100, 100)}%` },
+                ]}
               />
             </View>
+            <View style={styles.progressLabels}>
+              <Text style={styles.progressAmount}>
+                ${(stats?.total_earnings || 0).toFixed(2)}
+              </Text>
+              <Text style={styles.progressTarget}>$50.00</Text>
+            </View>
+            <Text style={styles.progressNote}>
+              {(stats?.total_earnings || 0) >= 50
+                ? 'Eligible for monthly payout'
+                : `${Math.min(Math.round(((stats?.total_earnings || 0) / 50) * 100), 100)}% toward next payout`}
+            </Text>
+          </View>
+        )}
 
-            {/* Sign Out */}
-            <TouchableOpacity style={styles.signOutButton} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={20} color={theme.colors.error} />
-              <Text style={styles.signOutText}>Sign Out</Text>
-            </TouchableOpacity>
+        {/* Stats Section */}
+        {loading ? (
+          <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />
+        ) : !isAdmin ? (
+          isArtist ? (
+            <View style={styles.statsGrid}>
+              <GlassStatCard
+                icon="play"
+                label="Total Plays"
+                value={formatNumber(stats?.total_plays || 0)}
+                color={theme.colors.primary}
+                gradientColors={['rgba(108,134,168,0.15)', 'rgba(108,134,168,0.05)']}
+              />
+              <GlassStatCard
+                icon="people"
+                label="Listeners"
+                value={formatNumber(stats?.unique_listeners || 0)}
+                color={theme.colors.accent}
+                gradientColors={['rgba(192,200,214,0.12)', 'rgba(192,200,214,0.04)']}
+              />
+              <GlassStatCard
+                icon="musical-note"
+                label="Tracks"
+                value={trackCount > 0 ? trackCount.toString() : (stats?.track_count?.toString() || '0')}
+                color={theme.colors.primary}
+                gradientColors={['rgba(108,134,168,0.15)', 'rgba(108,134,168,0.05)']}
+              />
+            </View>
+          ) : (
+            <View style={styles.heroCard}>
+              <LinearGradient
+                colors={['rgba(108,134,168,0.1)', 'rgba(27,31,43,0.6)']}
+                style={StyleSheet.absoluteFill}
+              />
+              {/* Hero stat — Discoveries */}
+              <View style={styles.heroMain}>
+                <View style={styles.heroIconRing}>
+                  <Ionicons name="compass" size={28} color={theme.colors.accent} />
+                </View>
+                <View>
+                  <Text style={styles.heroValue}>
+                    {formatNumber(stats?.discovery_count || 0)}
+                  </Text>
+                  <Text style={styles.heroLabel}>Discoveries</Text>
+                </View>
+              </View>
+              {/* Secondary stats */}
+              <View style={styles.heroRow}>
+                <View style={styles.heroStat}>
+                  <Ionicons name="gift" size={16} color="#4ade80" />
+                  <Text style={styles.heroStatValue}>
+                    ${(stats?.total_rewards || 0).toFixed(2)}
+                  </Text>
+                  <Text style={styles.heroStatLabel}>Rewards</Text>
+                </View>
+                <View style={styles.heroDivider} />
+                <View style={styles.heroStat}>
+                  <Ionicons name="play" size={16} color={theme.colors.primary} />
+                  <Text style={styles.heroStatValue}>
+                    {formatNumber(stats?.play_count || 0)}
+                  </Text>
+                  <Text style={styles.heroStatLabel}>Plays</Text>
+                </View>
+                <View style={styles.heroDivider} />
+                <View style={styles.heroStat}>
+                  <Ionicons name="trophy" size={16} color="#fbbf24" />
+                  <Text style={styles.heroStatValue}>
+                    {stats?.current_tier || 'Bronze'}
+                  </Text>
+                  <Text style={styles.heroStatLabel}>Tier</Text>
+                </View>
+              </View>
+              {/* Canonical copy */}
+              <Text style={styles.heroFooter}>
+                Rewards accrue from first listens on verified artists.
+              </Text>
+            </View>
+          )
+        ) : null}
+
+        {/* Analytics Section */}
+        {!isArtist && !isAdmin && !loading && (
+          <Pressable
+            style={styles.actionCard}
+            onPress={() => router.push('/insights/taste' as any)}
+          >
+            <LinearGradient
+              colors={['rgba(27,31,43,0.6)', 'rgba(33,38,55,0.6)']}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.actionContent}>
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="trending-up" size={24} color={theme.colors.accent} />
+              </View>
+              <View style={styles.actionTextContainer}>
+                <Text style={styles.actionTitle}>Taste Evolution</Text>
+                <Text style={styles.actionSubtitle}>See how your music taste has changed</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+            </View>
+          </Pressable>
+        )}
+
+        {/* Upload Music CTA for listeners */}
+        {!isArtist && !isAdmin && !loading && (
+          <Pressable
+            style={styles.actionCard}
+            onPress={() => router.push('/upload' as any)}
+          >
+            <LinearGradient
+              colors={['rgba(27,31,43,0.6)', 'rgba(33,38,55,0.6)']}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.actionContent}>
+              <View style={[styles.actionIconContainer, { backgroundColor: 'rgba(184, 134, 11, 0.15)' }]}>
+                <Ionicons name="cloud-upload" size={24} color={theme.colors.primary} />
+              </View>
+              <View style={styles.actionTextContainer}>
+                <Text style={styles.actionTitle}>Upload Music</Text>
+                <Text style={styles.actionSubtitle}>Start sharing your own tracks</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+            </View>
+          </Pressable>
+        )}
+
+        {/* Admin Dashboard */}
+        {(user.is_admin || user.type === 'admin') && !loading && (
+          <Pressable
+            style={styles.adminButton}
+            onPress={() => router.push('/admin' as any)}
+          >
+            <LinearGradient
+              colors={['#DC2626', '#991B1B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.adminGradient}
+            >
+              <View style={styles.adminIconContainer}>
+                <Ionicons name="shield-checkmark" size={24} color="#fff" />
+              </View>
+              <View style={styles.adminTextContainer}>
+                <Text style={styles.adminButtonTitle}>Admin Dashboard</Text>
+                <Text style={styles.adminButtonSubtitle}>
+                  Platform stats & management
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#fff" />
+            </LinearGradient>
+          </Pressable>
+        )}
+
+        {/* Frosted Glass Menu */}
+        <View style={styles.menu}>
+          <MenuItem
+            icon="settings-outline"
+            label="Settings"
+            onPress={() => router.push('/settings' as any)}
+          />
+          {!isAdmin && (
+            <MenuItem
+              icon="card-outline"
+              label="Subscription"
+              sublabel={user.subscription_status === 'active' ? 'Premium' : 'Free'}
+              onPress={() => router.push('/settings/subscription' as any)}
+            />
+          )}
+          <MenuItem
+            icon="help-circle-outline"
+            label="Help & Support"
+            onPress={handleHelpSupport}
+          />
+          <MenuItem
+            icon="information-circle-outline"
+            label="About"
+            onPress={() => router.push({ pathname: '/settings/legal', params: { type: 'terms' } } as any)}
+            isLast
+          />
+        </View>
+
+        {/* Sign Out */}
+        <Pressable style={styles.signOutButton} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color={theme.colors.error} />
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </Pressable>
 
         {/* Version */}
         <Text style={styles.version}>Palletium v1.0.0</Text>
       </ScrollView>
-    </SafeAreaView >
+    </SafeAreaView>
   );
 }
 
-// Helper Components
-function StatCard({ icon, label, value, color, onPress }: {
+// Glass Stat Card Component
+function GlassStatCard({ icon, label, value, color, gradientColors, onPress }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
   color: string;
+  gradientColors: [string, string];
   onPress?: () => void;
 }) {
   const Content = (
     <>
-      <Ionicons name={icon} size={24} color={color} />
+      <LinearGradient
+        colors={gradientColors}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.statIconRing}>
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </>
@@ -569,9 +662,9 @@ function StatCard({ icon, label, value, color, onPress }: {
 
   if (onPress) {
     return (
-      <TouchableOpacity style={styles.statCard} onPress={onPress}>
+      <Pressable style={styles.statCard} onPress={onPress}>
         {Content}
-      </TouchableOpacity>
+      </Pressable>
     );
   }
 
@@ -582,21 +675,24 @@ function StatCard({ icon, label, value, color, onPress }: {
   );
 }
 
-function MenuItem({ icon, label, sublabel, onPress }: {
+function MenuItem({ icon, label, sublabel, onPress, isLast }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   sublabel?: string;
   onPress: () => void;
+  isLast?: boolean;
 }) {
   return (
-    <TouchableOpacity style={styles.menuItem} onPress={onPress}>
-      <Ionicons name={icon} size={22} color={theme.colors.textSecondary} />
+    <Pressable style={[styles.menuItem, !isLast && styles.menuItemBorder]} onPress={onPress}>
+      <View style={styles.menuIconContainer}>
+        <Ionicons name={icon} size={20} color={theme.colors.textSecondary} />
+      </View>
       <View style={styles.menuItemContent}>
         <Text style={styles.menuItemLabel}>{label}</Text>
         {sublabel && <Text style={styles.menuItemSublabel}>{sublabel}</Text>}
       </View>
-      <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
-    </TouchableOpacity>
+      <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+    </Pressable>
   );
 }
 
@@ -618,25 +714,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.surface,
+    backgroundColor: 'rgba(245,158,11,0.08)',
     padding: theme.spacing.sm,
-    borderRadius: theme.borderRadius.sm,
+    borderRadius: 10,
     marginBottom: theme.spacing.md,
     gap: theme.spacing.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.15)',
   },
   offlineText: {
     color: theme.colors.warning,
     fontSize: theme.fontSize.sm,
   },
+  // Auth Screen
   authPrompt: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: theme.spacing.xl,
   },
+  authIconRing: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(108,134,168,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.1)',
+  },
   authTitle: {
     fontSize: theme.fontSize.xxl,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
     marginTop: theme.spacing.lg,
   },
@@ -648,17 +757,19 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   signInButton: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xxl,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: 14,
+    overflow: 'hidden',
     width: '100%',
+  },
+  signInGradient: {
+    paddingVertical: theme.spacing.md,
     alignItems: 'center',
+    borderRadius: 14,
   },
   signInText: {
     color: theme.colors.background,
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.semibold,
+    fontWeight: '700',
   },
   registerButton: {
     paddingVertical: theme.spacing.md,
@@ -667,8 +778,9 @@ const styles = StyleSheet.create({
   registerText: {
     color: theme.colors.primary,
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: '500',
   },
+  // Profile Header
   header: {
     alignItems: 'center',
     paddingVertical: theme.spacing.lg,
@@ -676,39 +788,48 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
   },
+  avatarGlow: {
+    shadowColor: '#6c86a8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
+    borderWidth: 2,
+    borderColor: 'rgba(192,200,214,0.15)',
   },
   avatarPlaceholder: {
-    backgroundColor: theme.colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 40,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.primary,
   },
   cameraIconContainer: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: theme.colors.primary,
     width: 32,
     height: 32,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: theme.colors.background,
+    backgroundColor: '#6c86a8',
   },
   name: {
     fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
     marginTop: theme.spacing.md,
+    letterSpacing: 0.2,
   },
   email: {
     fontSize: theme.fontSize.sm,
@@ -718,21 +839,24 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    paddingVertical: theme.spacing.xs,
+    backgroundColor: 'rgba(108,134,168,0.12)',
+    paddingVertical: 6,
     paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.full,
+    borderRadius: 20,
     marginTop: theme.spacing.sm,
-    gap: theme.spacing.xs,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.1)',
   },
   badgeText: {
     color: theme.colors.accent,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: '600',
   },
   loader: {
     marginVertical: theme.spacing.xl,
   },
+  // Glass Stats
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -741,144 +865,199 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '31%',
-    backgroundColor: theme.colors.surface,
+    borderRadius: 14,
     padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
+  },
+  statIconRing: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(192,200,214,0.08)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   statValue: {
     fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: '700',
     color: theme.colors.textPrimary,
     marginTop: theme.spacing.xs,
-  },
-  analyticsButton: {
-    marginTop: theme.spacing.lg,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  analyticsContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: theme.spacing.md,
-  },
-  analyticsIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.colors.surfaceElevated,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  analyticsTextContainer: {
-    flex: 1,
-  },
-  analyticsTitle: {
-    color: theme.colors.textPrimary,
-    fontWeight: 'bold',
-    fontSize: theme.fontSize.md,
-  },
-  analyticsSubtitle: {
-    color: theme.colors.textSecondary,
-    fontSize: theme.fontSize.xs,
   },
   statLabel: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.textMuted,
     marginTop: 2,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
-  journeyButton: {
-    marginTop: theme.spacing.lg,
-    borderRadius: theme.borderRadius.md,
+  // Discovery Hero Card (Listener)
+  heroCard: {
+    marginTop: theme.spacing.md,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
+    padding: theme.spacing.lg,
+  },
+  heroMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
+  },
+  heroIconRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(192,200,214,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
+  },
+  heroValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  heroLabel: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    letterSpacing: 0.3,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(192,200,214,0.06)',
+  },
+  heroStat: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  heroStatValue: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+  },
+  heroStatLabel: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textMuted,
+  },
+  heroDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(192,200,214,0.08)',
+  },
+  heroFooter: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+    marginTop: theme.spacing.md,
+    letterSpacing: 0.2,
+  },
+  // Payout Progress (Artist)
+  payoutCard: {
+    marginTop: theme.spacing.md,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
+    padding: theme.spacing.md,
+  },
+  payoutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: theme.spacing.md,
+  },
+  payoutTitle: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: 'rgba(192,200,214,0.08)',
+    borderRadius: 3,
     overflow: 'hidden',
   },
-  journeyButtonGradient: {
+  progressFill: {
+    height: 6,
+    borderRadius: 3,
+    minWidth: 4,
+  },
+  progressLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  progressAmount: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+  },
+  progressTarget: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textMuted,
+  },
+  progressNote: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textMuted,
+    marginTop: 4,
+  },
+  // Action Cards
+  actionCard: {
+    marginTop: theme.spacing.lg,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
+  },
+  actionContent: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: theme.spacing.md,
     gap: theme.spacing.md,
   },
-  journeyIconContainer: {
+  actionIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(192,200,214,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  journeyTextContainer: {
+  actionTextContainer: {
     flex: 1,
   },
-  journeyButtonTitle: {
-    color: theme.colors.background,
-    fontWeight: 'bold',
-    fontSize: theme.fontSize.md,
-  },
-  journeyButtonSubtitle: {
-    color: 'rgba(0,0,0,0.6)',
-    fontSize: theme.fontSize.xs,
-  },
-  adminButton: {
-    marginTop: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-  },
-  menu: {
-    marginTop: theme.spacing.xl,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  menuItemContent: {
-    flex: 1,
-    marginLeft: theme.spacing.md,
-  },
-  menuItemLabel: {
-    fontSize: theme.fontSize.md,
+  actionTitle: {
     color: theme.colors.textPrimary,
-  },
-  menuItemSublabel: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.textMuted,
-  },
-  signOutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: theme.spacing.xl,
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
-  signOutText: {
-    color: theme.colors.error,
+    fontWeight: '600',
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
   },
-  version: {
-    textAlign: 'center',
-    color: theme.colors.textMuted,
-    fontSize: theme.fontSize.sm,
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.xl,
+  actionSubtitle: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.xs,
+    marginTop: 2,
   },
-  // Earnings button styles
+  // Earnings Button
   earningsButton: {
     marginTop: theme.spacing.md,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
+    shadowColor: '#6c86a8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
   },
   earningsButtonGradient: {
     flexDirection: 'row',
@@ -890,22 +1069,24 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   earningsTextContainer: {
     flex: 1,
   },
   earningsLabel: {
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(255,255,255,0.85)',
     fontSize: theme.fontSize.sm,
     fontWeight: '500',
   },
   earningsValue: {
     color: '#fff',
     fontSize: theme.fontSize.xxl,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginTop: 2,
   },
   earningsArrow: {
@@ -922,12 +1103,106 @@ const styles = StyleSheet.create({
     right: theme.spacing.sm,
     backgroundColor: theme.colors.warning,
     paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 2,
-    borderRadius: theme.borderRadius.sm,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   pendingBadgeText: {
     color: theme.colors.background,
     fontSize: theme.fontSize.xs,
     fontWeight: '600',
+  },
+  // Admin Button
+  adminButton: {
+    marginTop: theme.spacing.md,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  adminGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.md,
+    gap: theme.spacing.md,
+  },
+  adminIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  adminTextContainer: {
+    flex: 1,
+  },
+  adminButtonTitle: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: theme.fontSize.md,
+  },
+  adminButtonSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: theme.fontSize.xs,
+    marginTop: 2,
+  },
+  // Frosted Glass Menu
+  menu: {
+    marginTop: theme.spacing.xl,
+    backgroundColor: 'rgba(27,31,43,0.6)',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.06)',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.md,
+    gap: theme.spacing.md,
+  },
+  menuItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(192,200,214,0.06)',
+  },
+  menuIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(192,200,214,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuItemContent: {
+    flex: 1,
+  },
+  menuItemLabel: {
+    fontSize: theme.fontSize.md,
+    color: theme.colors.textPrimary,
+    fontWeight: '500',
+  },
+  menuItemSublabel: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textMuted,
+    marginTop: 2,
+  },
+  // Sign Out
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing.xl,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  signOutText: {
+    color: theme.colors.error,
+    fontSize: theme.fontSize.md,
+    fontWeight: '500',
+  },
+  version: {
+    textAlign: 'center',
+    color: theme.colors.textMuted,
+    fontSize: theme.fontSize.sm,
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.xl,
   },
 });

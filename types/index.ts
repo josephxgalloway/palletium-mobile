@@ -34,6 +34,7 @@ export interface Track {
   artist_name_full?: string;
   cover_art_url?: string;
   duration?: number | null;
+  plays?: number;
   album?: string;
 }
 

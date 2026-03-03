@@ -13,7 +13,9 @@ interface Track {
     id: number;
     title: string;
     genre: string;
-    play_count: number;
+    plays?: number;
+    play_count?: number;
+    duration?: number;
     review_status: 'pending' | 'approved' | 'rejected';
     is_public: boolean;
     created_at: string;
@@ -81,7 +83,7 @@ function ArtistStudioScreen() {
         <TouchableOpacity style={styles.trackCard} onPress={() => handleEditTrack(item)}>
             <View style={styles.trackInfo}>
                 <Text style={styles.trackTitle}>{item.title}</Text>
-                <Text style={styles.trackMeta}>{item.genre || 'No genre'} • {item.play_count} plays</Text>
+                <Text style={styles.trackMeta}>{item.genre || 'No genre'} • {item.plays ?? item.play_count ?? 0} plays</Text>
             </View>
 
             <View style={styles.statusContainer}>

@@ -36,7 +36,7 @@ function useMockActiveTrack() {
 }
 
 export function useTrackProgress() {
-  const { setPosition, setDuration, setIsPlaying, checkAndRecordPlay, checkPreviewEnd, isPlaying, position, duration, currentTrack, isPreviewMode } = usePlayerStore();
+  const { setPosition, setDuration, checkAndRecordPlay, checkPreviewEnd, isPlaying, position, duration, currentTrack, isPreviewMode } = usePlayerStore();
   const checkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mockPositionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -53,13 +53,11 @@ export function useTrackProgress() {
     }
   }, [progress.position, progress.duration, setPosition, setDuration]);
 
-  // Update playing state (only for native player)
-  useEffect(() => {
-    if (isNativeAvailable && State) {
-      const playing = playbackState.state === State.Playing;
-      setIsPlaying(playing);
-    }
-  }, [playbackState.state, setIsPlaying]);
+  // NOTE: We intentionally do NOT sync native playbackState → store isPlaying.
+  // The Zustand store is the source of truth for isPlaying, maintained by
+  // playTrack/pause/resume/stop. The native usePlaybackState() hook is unreliable
+  // in dev client builds and can report stale/wrong state, causing the play/pause
+  // button to break (always shows "play" even while audio is playing).
 
   // Mock player position simulation (Expo Go only)
   useEffect(() => {
@@ -90,9 +88,8 @@ export function useTrackProgress() {
 
   // Set up interval to check for 30s threshold and preview end while playing
   useEffect(() => {
-    const isCurrentlyPlaying = isNativeAvailable && State
-      ? playbackState.state === State.Playing
-      : isPlaying;
+    // Always use store's isPlaying — native playbackState is unreliable
+    const isCurrentlyPlaying = isPlaying;
 
     if (isCurrentlyPlaying && currentTrack) {
       console.log(`[useTrackProgress] Starting check interval for "${currentTrack.title}" (preview: ${isPreviewMode})`);
@@ -127,11 +124,9 @@ export function useTrackProgress() {
     };
   }, [playbackState.state, isPlaying, isPreviewMode, currentTrack, checkAndRecordPlay, checkPreviewEnd]);
 
-  // For native player
+  // For native player — use store's isPlaying (source of truth), native progress for position/duration
   if (isNativeAvailable && State) {
-    const isActuallyPlaying = playbackState.state === State.Playing;
     // Only show buffering if we're in buffering/loading state AND position hasn't advanced past 1 second
-    // This prevents showing buffering spinner when audio is actually playing
     const rawBuffering = playbackState.state === State.Buffering || playbackState.state === State.Loading;
     const isBuffering = rawBuffering && progress.position < 1;
 
@@ -139,7 +134,7 @@ export function useTrackProgress() {
       position: progress.position,
       duration: progress.duration,
       buffered: progress.buffered,
-      isPlaying: isActuallyPlaying,
+      isPlaying,  // From Zustand store — reliable source of truth
       isBuffering,
       activeTrack,
     };
