@@ -10,6 +10,7 @@ import {
   TextInput,
   Keyboard,
   Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -46,6 +47,12 @@ export default function LibraryScreen() {
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [creatingPlaylist, setCreatingPlaylist] = useState(false);
+
+  // Rename Playlist Modal
+  const [showRenamePlaylist, setShowRenamePlaylist] = useState(false);
+  const [renamePlaylistTarget, setRenamePlaylistTarget] = useState<Playlist | null>(null);
+  const [renamePlaylistName, setRenamePlaylistName] = useState('');
+  const [renamingPlaylist, setRenamingPlaylist] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -146,6 +153,71 @@ export default function LibraryScreen() {
     }
   };
 
+  // Playlist long-press actions
+  const handlePlaylistLongPress = (playlist: Playlist) => {
+    Alert.alert(
+      playlist.name,
+      undefined,
+      [
+        {
+          text: 'Rename',
+          onPress: () => handleRenamePlaylist(playlist),
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => handleDeletePlaylist(playlist),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleRenamePlaylist = (playlist: Playlist) => {
+    setRenamePlaylistTarget(playlist);
+    setRenamePlaylistName(playlist.name);
+    setShowRenamePlaylist(true);
+  };
+
+  const submitRenamePlaylist = async () => {
+    if (!renamePlaylistTarget || !renamePlaylistName.trim()) return;
+    setRenamingPlaylist(true);
+    try {
+      await api.put(`/playlists/${renamePlaylistTarget.id}`, { name: renamePlaylistName.trim() });
+      Toast.show({ type: 'success', text1: 'Playlist renamed' });
+      setShowRenamePlaylist(false);
+      setRenamePlaylistTarget(null);
+      fetchData();
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Failed to rename', text2: error.response?.data?.error || error.message });
+    } finally {
+      setRenamingPlaylist(false);
+    }
+  };
+
+  const handleDeletePlaylist = (playlist: Playlist) => {
+    Alert.alert(
+      'Delete Playlist',
+      `Are you sure you want to delete "${playlist.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/playlists/${playlist.id}`);
+              Toast.show({ type: 'success', text1: 'Playlist deleted' });
+              fetchData();
+            } catch (error: any) {
+              Toast.show({ type: 'error', text1: 'Failed to delete', text2: error.response?.data?.error || error.message });
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Not authenticated
   if (!isAuthenticated) {
     return (
@@ -183,6 +255,7 @@ export default function LibraryScreen() {
     <Pressable
       style={styles.playlistCard}
       onPress={() => router.push(`/playlist/${item.id}` as any)}
+      onLongPress={() => handlePlaylistLongPress(item)}
     >
       {item.cover_url ? (
         <Image source={{ uri: item.cover_url }} style={styles.playlistCover} transition={200} />
@@ -197,7 +270,13 @@ export default function LibraryScreen() {
           {item.track_count} tracks {item.is_public ? '' : '- Private'}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+      <Pressable
+        style={styles.editButton}
+        onPress={() => handlePlaylistLongPress(item)}
+        hitSlop={8}
+      >
+        <Ionicons name="ellipsis-vertical" size={20} color={theme.colors.textMuted} />
+      </Pressable>
     </Pressable>
   );
 
@@ -562,6 +641,57 @@ export default function LibraryScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Rename Playlist Modal */}
+      <Modal
+        visible={showRenamePlaylist}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowRenamePlaylist(false)}
+      >
+        <View style={styles.modalContainer}>
+          <LinearGradient
+            colors={['rgba(108,134,168,0.08)', 'transparent']}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setShowRenamePlaylist(false)}>
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </Pressable>
+            <Text style={styles.modalTitle}>Rename Playlist</Text>
+            <Pressable onPress={submitRenamePlaylist} disabled={renamingPlaylist || !renamePlaylistName.trim()}>
+              {renamingPlaylist ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : (
+                <Text style={[styles.modalCreate, !renamePlaylistName.trim() && styles.modalCreateDisabled]}>
+                  Save
+                </Text>
+              )}
+            </Pressable>
+          </View>
+
+          <View style={styles.modalContent}>
+            <View style={styles.playlistIconContainer}>
+              <LinearGradient
+                colors={['rgba(108,134,168,0.2)', 'rgba(192,200,214,0.1)']}
+                style={styles.playlistIconGradient}
+              >
+                <Ionicons name="create-outline" size={48} color={theme.colors.textMuted} />
+              </LinearGradient>
+            </View>
+            <TextInput
+              style={styles.playlistNameInput}
+              placeholder="Playlist name"
+              placeholderTextColor={theme.colors.textMuted}
+              value={renamePlaylistName}
+              onChangeText={setRenamePlaylistName}
+              autoFocus
+              maxLength={50}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -697,6 +827,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  editButton: {
+    padding: 8,
+    borderRadius: 16,
   },
   playlistInfo: {
     flex: 1,

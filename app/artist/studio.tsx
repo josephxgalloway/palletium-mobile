@@ -3,6 +3,8 @@ import { theme } from '@/constants/theme';
 import { getArtistTracks } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -16,9 +18,20 @@ interface Track {
     plays?: number;
     play_count?: number;
     duration?: number;
-    review_status: 'pending' | 'approved' | 'rejected';
+    cover_art_url?: string | null;
+    coverArtUrl?: string | null;
+    cover_url?: string | null;
+    artwork_url?: string | null;
+    audio_url?: string;
+    artist_name?: string;
+    album?: string;
+    review_status: string;
     is_public: boolean;
     created_at: string;
+}
+
+function getTrackCover(track: Track): string | null {
+    return track.cover_art_url || track.coverArtUrl || track.cover_url || track.artwork_url || null;
 }
 
 // Gate: artist-only — no hooks fire before RoleGate resolves
@@ -79,11 +92,29 @@ function ArtistStudioScreen() {
         router.push(`/artist/track/${track.id}/edit` as any);
     };
 
-    const renderTrackItem = ({ item }: { item: Track }) => (
+    const formatDuration = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const renderTrackItem = ({ item }: { item: Track }) => {
+        const coverUrl = getTrackCover(item);
+        return (
         <TouchableOpacity style={styles.trackCard} onPress={() => handleEditTrack(item)}>
+            {coverUrl ? (
+                <Image source={{ uri: coverUrl }} style={styles.trackCover} contentFit="cover" transition={200} />
+            ) : (
+                <View style={[styles.trackCover, styles.trackCoverPlaceholder]}>
+                    <Ionicons name="musical-note" size={20} color={theme.colors.textMuted} />
+                </View>
+            )}
             <View style={styles.trackInfo}>
-                <Text style={styles.trackTitle}>{item.title}</Text>
-                <Text style={styles.trackMeta}>{item.genre || 'No genre'} • {item.plays ?? item.play_count ?? 0} plays</Text>
+                <Text style={styles.trackTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.trackMeta} numberOfLines={1}>
+                    {item.genre || 'No genre'} · {item.plays ?? item.play_count ?? 0} plays
+                    {item.duration ? ` · ${formatDuration(item.duration)}` : ''}
+                </Text>
             </View>
 
             <View style={styles.statusContainer}>
@@ -102,16 +133,11 @@ function ArtistStudioScreen() {
                         <Text style={styles.badgeText}>{item.is_public ? 'Public' : 'Private'}</Text>
                     </View>
                 )}
-                <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => handleEditTrack(item)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                    <Ionicons name="pencil" size={18} color={theme.colors.primary} />
-                </TouchableOpacity>
             </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
         </TouchableOpacity>
     );
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -192,49 +218,54 @@ const styles = StyleSheet.create({
     },
     trackCard: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: theme.colors.surface,
-        padding: theme.spacing.md,
-        borderRadius: theme.borderRadius.md,
+        backgroundColor: 'rgba(27,31,43,0.6)',
+        padding: theme.spacing.sm,
+        borderRadius: 14,
         marginBottom: theme.spacing.sm,
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.06)',
+        gap: theme.spacing.sm,
+    },
+    trackCover: {
+        width: 52,
+        height: 52,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.08)',
+    },
+    trackCoverPlaceholder: {
+        backgroundColor: 'rgba(108,134,168,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     trackInfo: {
         flex: 1,
-        marginRight: theme.spacing.sm,
     },
     trackTitle: {
         fontSize: theme.fontSize.md,
-        fontWeight: 'bold',
+        fontWeight: '600',
         color: theme.colors.textPrimary,
-        marginBottom: 4,
+        marginBottom: 2,
     },
     trackMeta: {
         fontSize: theme.fontSize.sm,
-        color: theme.colors.textSecondary,
+        color: theme.colors.textMuted,
     },
     statusContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: theme.spacing.sm,
+        gap: theme.spacing.xs,
     },
     badge: {
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 4,
+        borderRadius: 8,
     },
     badgeText: {
         fontSize: 10,
-        fontWeight: 'bold',
+        fontWeight: '600',
         color: '#fff',
-    },
-    editButton: {
-        width: 36,
-        height: 36,
-        borderRadius: theme.borderRadius.sm,
-        backgroundColor: theme.colors.surfaceElevated,
-        justifyContent: 'center',
-        alignItems: 'center',
     },
     emptyText: {
         fontSize: theme.fontSize.lg,

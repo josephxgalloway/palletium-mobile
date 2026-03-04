@@ -1,3 +1,4 @@
+import { AnimatedSplash } from '@/components/AnimatedSplash';
 import MiniPlayer from '@/components/player/MiniPlayer';
 import SignupPromptModal from '@/components/SignupPromptModal';
 import { ArtistPlayToast } from '@/components/artist/ArtistPlayToast';
@@ -69,6 +70,7 @@ export default function RootLayout() {
   const { loadPreviewCount } = usePlayerStore();
   const { fetchStats } = useGamificationStore();
   const [playerReady, setPlayerReady] = useState(false);
+  const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const [loaded] = useFonts({
@@ -122,6 +124,9 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      {showAnimatedSplash && (
+        <AnimatedSplash onFinish={() => setShowAnimatedSplash(false)} />
+      )}
       <OptionalStripeProvider>
         <ThemeProvider value={PalletiumTheme}>
           <StatusBar style="light" />

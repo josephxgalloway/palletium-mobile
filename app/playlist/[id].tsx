@@ -2,6 +2,7 @@ import { theme } from '@/constants/theme';
 import {
     getPlaylist,
     updatePlaylist,
+    uploadPlaylistCover,
     removeTrackFromPlaylist,
     reorderPlaylistTracks
 } from '@/lib/api/client';
@@ -10,6 +11,8 @@ import { usePlayerStore } from '@/lib/store/playerStore';
 import type { Playlist, Track } from '@/types';
 import { getArtistName, getCoverUrl, getDuration } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -34,7 +37,7 @@ import {
 } from 'react-native-gesture-handler';
 
 const { width } = Dimensions.get('window');
-const ARTWORK_SIZE = (width - 64) / 2;
+const COVER_SIZE = width * 0.52;
 
 export default function PlaylistDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -48,7 +51,9 @@ export default function PlaylistDetailScreen() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editName, setEditName] = useState('');
     const [editDescription, setEditDescription] = useState('');
+    const [editCoverUri, setEditCoverUri] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const [uploadingCover, setUploadingCover] = useState(false);
 
     const isOwner = playlist?.is_owner || (playlist?.creator_id === user?.id);
 
@@ -83,7 +88,6 @@ export default function PlaylistDetailScreen() {
     const handlePlay = async () => {
         if (!playlist?.tracks || playlist.tracks.length === 0) return;
 
-        // Play first track, then add rest to queue
         await playTrack(playlist.tracks[0]);
         for (let i = 1; i < playlist.tracks.length; i++) {
             await addToQueue(playlist.tracks[i]);
@@ -101,10 +105,8 @@ export default function PlaylistDetailScreen() {
     const handleShuffle = async () => {
         if (!playlist?.tracks || playlist.tracks.length === 0) return;
 
-        // Shuffle the tracks
         const shuffled = [...playlist.tracks].sort(() => Math.random() - 0.5);
 
-        // Play first shuffled track, then add rest to queue
         await playTrack(shuffled[0]);
         for (let i = 1; i < shuffled.length; i++) {
             await addToQueue(shuffled[i]);
@@ -129,7 +131,6 @@ export default function PlaylistDetailScreen() {
         } else {
             await playTrack(track);
 
-            // Queue remaining tracks after this one
             if (playlist?.tracks) {
                 const trackIndex = playlist.tracks.findIndex(t => t.id === track.id);
                 for (let i = trackIndex + 1; i < playlist.tracks.length; i++) {
@@ -145,7 +146,6 @@ export default function PlaylistDetailScreen() {
 
     const navigateToCreator = () => {
         if (!playlist?.creator_id) return;
-        // Could be artist or user - for now navigate to artist
         router.push(`/artist/${playlist.creator_id}` as any);
     };
 
@@ -154,7 +154,7 @@ export default function PlaylistDetailScreen() {
 
         Alert.alert(
             'Remove Track',
-            'Are you sure you want to remove this track from the playlist?',
+            'Remove this track from the playlist?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -163,7 +163,6 @@ export default function PlaylistDetailScreen() {
                     onPress: async () => {
                         try {
                             await removeTrackFromPlaylist(playlist.id, trackId);
-                            // Update local state
                             setPlaylist(prev => {
                                 if (!prev || !prev.tracks) return prev;
                                 return {
@@ -190,11 +189,45 @@ export default function PlaylistDetailScreen() {
         );
     };
 
+    const pickCoverImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+
+        if (!result.canceled && result.assets[0]) {
+            setEditCoverUri(result.assets[0].uri);
+        }
+    };
+
     const handleSaveEdit = async () => {
         if (!playlist || !editName.trim()) return;
 
         setSaving(true);
         try {
+            // Upload cover image if changed
+            if (editCoverUri) {
+                setUploadingCover(true);
+                try {
+                    const coverResult = await uploadPlaylistCover(playlist.id, editCoverUri);
+                    setPlaylist(prev => prev ? {
+                        ...prev,
+                        cover_url: coverResult.coverImageUrl || coverResult.playlist?.cover_image
+                    } : null);
+                } catch (e: any) {
+                    Toast.show({
+                        type: 'error',
+                        text1: 'Cover upload failed',
+                        text2: e.response?.data?.message || 'Image may be too large',
+                    });
+                } finally {
+                    setUploadingCover(false);
+                }
+            }
+
+            // Update name/description
             await updatePlaylist(playlist.id, {
                 name: editName.trim(),
                 description: editDescription.trim() || undefined
@@ -207,6 +240,7 @@ export default function PlaylistDetailScreen() {
             } : null);
 
             setEditModalVisible(false);
+            setEditCoverUri(null);
             Toast.show({
                 type: 'success',
                 text1: 'Playlist updated',
@@ -234,7 +268,7 @@ export default function PlaylistDetailScreen() {
         if (hours > 0) {
             return `${hours}h ${mins}m`;
         }
-        return `${mins}m`;
+        return `${mins} min`;
     };
 
     const getTotalDuration = () => {
@@ -243,11 +277,19 @@ export default function PlaylistDetailScreen() {
         return playlist.tracks.reduce((sum, track) => sum + getDuration(track), 0);
     };
 
+    const getPlaylistCoverUrl = (): string | null => {
+        if (playlist?.cover_url) return playlist.cover_url;
+        // Fallback to cover_image from backend
+        if ((playlist as any)?.cover_image) return (playlist as any).cover_image;
+        return null;
+    };
+
     // Generate artwork grid from first 4 track covers
     const renderArtworkGrid = () => {
-        if (playlist?.cover_url) {
+        const coverUrl = getPlaylistCoverUrl();
+        if (coverUrl) {
             return (
-                <Image source={{ uri: playlist.cover_url }} style={styles.playlistCover} />
+                <Image source={{ uri: coverUrl }} style={styles.playlistCover} />
             );
         }
 
@@ -259,7 +301,11 @@ export default function PlaylistDetailScreen() {
         if (covers.length === 0) {
             return (
                 <View style={[styles.playlistCover, styles.playlistCoverPlaceholder]}>
-                    <Ionicons name="musical-notes" size={60} color={theme.colors.textMuted} />
+                    <LinearGradient
+                        colors={['rgba(108,134,168,0.15)', 'rgba(108,134,168,0.05)']}
+                        style={StyleSheet.absoluteFill}
+                    />
+                    <Ionicons name="musical-notes" size={52} color={theme.colors.textMuted} />
                 </View>
             );
         }
@@ -291,7 +337,8 @@ export default function PlaylistDetailScreen() {
                 style={styles.deleteAction}
                 onPress={() => handleRemoveTrack(trackId)}
             >
-                <Ionicons name="trash" size={24} color="#fff" />
+                <Ionicons name="trash-outline" size={22} color="#fff" />
+                <Text style={styles.deleteActionText}>Remove</Text>
             </TouchableOpacity>
         );
     };
@@ -307,14 +354,24 @@ export default function PlaylistDetailScreen() {
                 style={[styles.trackItem, isActive && styles.trackItemActive]}
                 onPress={() => handleTrackPress(track)}
                 onLongPress={() => navigateToTrack(track)}
+                activeOpacity={0.6}
             >
-                <Text style={styles.trackNumber}>{index + 1}</Text>
+                {/* Track number or playing indicator */}
+                {isActive && isPlaying ? (
+                    <View style={styles.trackNumberContainer}>
+                        <Ionicons name="volume-high" size={14} color={theme.colors.primary} />
+                    </View>
+                ) : (
+                    <View style={styles.trackNumberContainer}>
+                        <Text style={[styles.trackNumber, isActive && styles.trackNumberActive]}>{index + 1}</Text>
+                    </View>
+                )}
 
                 {coverUrl ? (
                     <Image source={{ uri: coverUrl }} style={styles.trackCover} />
                 ) : (
                     <View style={[styles.trackCover, styles.trackCoverPlaceholder]}>
-                        <Ionicons name="musical-note" size={16} color={theme.colors.textMuted} />
+                        <Ionicons name="musical-note" size={18} color={theme.colors.textMuted} />
                     </View>
                 )}
 
@@ -326,17 +383,13 @@ export default function PlaylistDetailScreen() {
                         {track.title}
                     </Text>
                     <Text style={styles.trackArtist} numberOfLines={1}>
-                        {artistName}
+                        {artistName}{track.album ? ` · ${track.album}` : ''}
                     </Text>
                 </View>
 
-                <Text style={styles.trackDuration}>{formatDuration(duration)}</Text>
-
-                {isActive && isPlaying && (
-                    <View style={styles.nowPlaying}>
-                        <Ionicons name="volume-high" size={16} color={theme.colors.primary} />
-                    </View>
-                )}
+                <Text style={[styles.trackDuration, isActive && styles.trackDurationActive]}>
+                    {formatDuration(duration)}
+                </Text>
             </TouchableOpacity>
         );
 
@@ -387,10 +440,18 @@ export default function PlaylistDetailScreen() {
         );
     }
 
+    const trackCount = playlist.track_count || playlist.tracks?.length || 0;
+
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView style={styles.container}>
                 <Stack.Screen options={{ headerShown: false }} />
+
+                <LinearGradient
+                    colors={['rgba(108,134,168,0.1)', 'transparent']}
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
+                />
 
                 {/* Header */}
                 <View style={styles.header}>
@@ -400,7 +461,12 @@ export default function PlaylistDetailScreen() {
                     <Text style={styles.headerTitle}>Playlist</Text>
                     {isOwner ? (
                         <TouchableOpacity
-                            onPress={() => setEditModalVisible(true)}
+                            onPress={() => {
+                                setEditCoverUri(null);
+                                setEditName(playlist.name);
+                                setEditDescription(playlist.description || '');
+                                setEditModalVisible(true);
+                            }}
                             style={styles.editButton}
                         >
                             <Ionicons name="create-outline" size={22} color={theme.colors.textPrimary} />
@@ -415,59 +481,93 @@ export default function PlaylistDetailScreen() {
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
                     }
+                    showsVerticalScrollIndicator={false}
                 >
-                    {/* Playlist Info */}
-                    <View style={styles.playlistInfo}>
-                        {renderArtworkGrid()}
+                    {/* Playlist Hero */}
+                    <View style={styles.heroSection}>
+                        <View style={styles.coverContainer}>
+                            {renderArtworkGrid()}
+                            <View style={styles.coverShadow} />
+                        </View>
 
-                        <View style={styles.infoContainer}>
-                            <Text style={styles.playlistName}>{playlist.name}</Text>
+                        <Text style={styles.playlistName} numberOfLines={2}>{playlist.name}</Text>
 
-                            <TouchableOpacity onPress={navigateToCreator} style={styles.creatorRow}>
-                                <Text style={styles.creatorText}>by {playlist.creator_name || 'Unknown'}</Text>
-                            </TouchableOpacity>
+                        <TouchableOpacity onPress={navigateToCreator} style={styles.creatorRow}>
+                            <Text style={styles.creatorText}>by {playlist.creator_name || 'You'}</Text>
+                        </TouchableOpacity>
 
-                            <Text style={styles.metaText}>
-                                {playlist.track_count || playlist.tracks?.length || 0} tracks · {formatTotalDuration(getTotalDuration())}
-                            </Text>
-
-                            {playlist.description && (
-                                <Text style={styles.description} numberOfLines={2}>
-                                    {playlist.description}
-                                </Text>
+                        <View style={styles.metaRow}>
+                            <View style={styles.metaPill}>
+                                <Ionicons name="musical-notes-outline" size={13} color={theme.colors.textSecondary} />
+                                <Text style={styles.metaPillText}>{trackCount} {trackCount === 1 ? 'track' : 'tracks'}</Text>
+                            </View>
+                            <View style={styles.metaPill}>
+                                <Ionicons name="time-outline" size={13} color={theme.colors.textSecondary} />
+                                <Text style={styles.metaPillText}>{formatTotalDuration(getTotalDuration())}</Text>
+                            </View>
+                            {playlist.is_public && (
+                                <View style={styles.metaPill}>
+                                    <Ionicons name="globe-outline" size={13} color={theme.colors.textSecondary} />
+                                    <Text style={styles.metaPillText}>Public</Text>
+                                </View>
                             )}
                         </View>
+
+                        {playlist.description ? (
+                            <Text style={styles.description} numberOfLines={3}>
+                                {playlist.description}
+                            </Text>
+                        ) : null}
                     </View>
 
                     {/* Play Buttons */}
                     <View style={styles.playActions}>
-                        <TouchableOpacity style={styles.playButton} onPress={handlePlay}>
-                            <Ionicons name="play" size={22} color={theme.colors.background} />
+                        <TouchableOpacity
+                            style={[styles.playButton, trackCount === 0 && styles.buttonDisabled]}
+                            onPress={handlePlay}
+                            disabled={trackCount === 0}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="play" size={20} color={theme.colors.background} />
                             <Text style={styles.playButtonText}>Play</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.shuffleButton} onPress={handleShuffle}>
-                            <Ionicons name="shuffle" size={22} color={theme.colors.primary} />
+                        <TouchableOpacity
+                            style={[styles.shuffleButton, trackCount === 0 && styles.buttonDisabled]}
+                            onPress={handleShuffle}
+                            disabled={trackCount === 0}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="shuffle" size={20} color={theme.colors.primary} />
                             <Text style={styles.shuffleButtonText}>Shuffle</Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* Tracks Section */}
                     <View style={styles.tracksSection}>
-                        <Text style={styles.sectionTitle}>Tracks</Text>
+                        <View style={styles.tracksSectionHeader}>
+                            <Ionicons name="list-outline" size={16} color={theme.colors.textMuted} />
+                            <Text style={styles.tracksSectionTitle}>TRACKLIST</Text>
+                        </View>
 
-                        {isOwner && (
-                            <Text style={styles.swipeHint}>Swipe left to remove</Text>
+                        {isOwner && trackCount > 0 && (
+                            <Text style={styles.swipeHint}>Swipe left on a track to remove it</Text>
                         )}
 
                         {(!playlist.tracks || playlist.tracks.length === 0) ? (
                             <View style={styles.emptyTracks}>
-                                <Ionicons name="musical-notes-outline" size={48} color={theme.colors.textMuted} />
-                                <Text style={styles.emptyText}>No tracks in this playlist</Text>
-                                <Text style={styles.emptySubtext}>Add tracks from the discover page</Text>
+                                <View style={styles.emptyIconRing}>
+                                    <Ionicons name="musical-notes-outline" size={40} color={theme.colors.textMuted} />
+                                </View>
+                                <Text style={styles.emptyText}>No tracks yet</Text>
+                                <Text style={styles.emptySubtext}>
+                                    Browse Discover to find tracks and add them to this playlist
+                                </Text>
                             </View>
                         ) : (
-                            playlist.tracks.map((track, index) => renderTrack(track, index))
+                            <View style={styles.tracksList}>
+                                {playlist.tracks.map((track, index) => renderTrack(track, index))}
+                            </View>
                         )}
                     </View>
                 </ScrollView>
@@ -497,7 +597,33 @@ export default function PlaylistDetailScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.editForm}>
+                        <ScrollView style={styles.editForm} showsVerticalScrollIndicator={false}>
+                            {/* Cover Image Picker */}
+                            <Text style={styles.inputLabel}>Cover Image</Text>
+                            <TouchableOpacity style={styles.coverPicker} onPress={pickCoverImage} activeOpacity={0.7}>
+                                {editCoverUri ? (
+                                    <Image source={{ uri: editCoverUri }} style={styles.coverPickerImage} />
+                                ) : getPlaylistCoverUrl() ? (
+                                    <Image source={{ uri: getPlaylistCoverUrl()! }} style={styles.coverPickerImage} />
+                                ) : (
+                                    <View style={styles.coverPickerPlaceholder}>
+                                        <Ionicons name="image-outline" size={32} color={theme.colors.textMuted} />
+                                    </View>
+                                )}
+                                <View style={styles.coverPickerOverlay}>
+                                    <View style={styles.coverPickerBadge}>
+                                        <Ionicons name="camera" size={16} color="#fff" />
+                                    </View>
+                                </View>
+                                {uploadingCover && (
+                                    <View style={styles.coverPickerLoading}>
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                            <Text style={styles.coverHint}>Tap to choose a cover photo</Text>
+
+                            {/* Name */}
                             <Text style={styles.inputLabel}>Name</Text>
                             <TextInput
                                 style={styles.input}
@@ -507,17 +633,18 @@ export default function PlaylistDetailScreen() {
                                 placeholderTextColor={theme.colors.textMuted}
                             />
 
+                            {/* Description */}
                             <Text style={styles.inputLabel}>Description</Text>
                             <TextInput
                                 style={[styles.input, styles.textArea]}
                                 value={editDescription}
                                 onChangeText={setEditDescription}
-                                placeholder="Add a description (optional)"
+                                placeholder="What's this playlist about?"
                                 placeholderTextColor={theme.colors.textMuted}
                                 multiline
-                                numberOfLines={3}
+                                textAlignVertical="top"
                             />
-                        </View>
+                        </ScrollView>
                     </View>
                 </Modal>
             </SafeAreaView>
@@ -551,7 +678,7 @@ const styles = StyleSheet.create({
     },
     headerTitle: {
         fontSize: theme.fontSize.md,
-        fontWeight: theme.fontWeight.medium,
+        fontWeight: '500',
         color: theme.colors.textSecondary,
     },
     editButton: {
@@ -561,63 +688,97 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     content: {
-        padding: theme.spacing.md,
+        paddingHorizontal: theme.spacing.md,
         paddingBottom: 120,
     },
-    playlistInfo: {
-        flexDirection: 'row',
-        marginBottom: theme.spacing.xl,
+    // Hero section - centered artwork + info
+    heroSection: {
+        alignItems: 'center',
+        paddingTop: theme.spacing.sm,
+        marginBottom: theme.spacing.lg,
+    },
+    coverContainer: {
+        marginBottom: theme.spacing.lg,
     },
     playlistCover: {
-        width: ARTWORK_SIZE,
-        height: ARTWORK_SIZE,
-        borderRadius: theme.borderRadius.lg,
+        width: COVER_SIZE,
+        height: COVER_SIZE,
+        borderRadius: 16,
     },
     playlistCoverPlaceholder: {
-        backgroundColor: theme.colors.surface,
+        backgroundColor: 'rgba(27,31,43,0.8)',
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.06)',
+    },
+    coverShadow: {
+        position: 'absolute',
+        bottom: -8,
+        left: 16,
+        right: 16,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        zIndex: -1,
     },
     artworkGrid: {
-        width: ARTWORK_SIZE,
-        height: ARTWORK_SIZE,
+        width: COVER_SIZE,
+        height: COVER_SIZE,
         flexDirection: 'row',
         flexWrap: 'wrap',
-        borderRadius: theme.borderRadius.lg,
+        borderRadius: 16,
         overflow: 'hidden',
     },
     artworkGridItem: {
-        width: ARTWORK_SIZE / 2,
-        height: ARTWORK_SIZE / 2,
-    },
-    infoContainer: {
-        flex: 1,
-        marginLeft: theme.spacing.md,
-        justifyContent: 'center',
+        width: COVER_SIZE / 2,
+        height: COVER_SIZE / 2,
     },
     playlistName: {
-        fontSize: theme.fontSize.xl,
-        fontWeight: theme.fontWeight.bold,
+        fontSize: 26,
+        fontWeight: '700',
         color: theme.colors.textPrimary,
-        marginBottom: theme.spacing.xs,
+        textAlign: 'center',
+        marginBottom: 6,
+        paddingHorizontal: theme.spacing.md,
     },
     creatorRow: {
-        marginBottom: theme.spacing.xs,
+        marginBottom: theme.spacing.sm,
     },
     creatorText: {
         fontSize: theme.fontSize.sm,
-        color: theme.colors.textSecondary,
+        color: theme.colors.primary,
+        fontWeight: '500',
     },
-    metaText: {
-        fontSize: theme.fontSize.sm,
-        color: theme.colors.textMuted,
+    metaRow: {
+        flexDirection: 'row',
+        gap: theme.spacing.sm,
         marginBottom: theme.spacing.sm,
+    },
+    metaPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        backgroundColor: 'rgba(27,31,43,0.6)',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.06)',
+    },
+    metaPillText: {
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textSecondary,
+        fontWeight: '500',
     },
     description: {
         fontSize: theme.fontSize.sm,
         color: theme.colors.textSecondary,
         lineHeight: 20,
+        textAlign: 'center',
+        paddingHorizontal: theme.spacing.lg,
     },
+    // Play Actions
     playActions: {
         flexDirection: 'row',
         gap: theme.spacing.md,
@@ -629,13 +790,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: theme.colors.primary,
-        paddingVertical: theme.spacing.md,
-        borderRadius: theme.borderRadius.full,
+        paddingVertical: 14,
+        borderRadius: 14,
         gap: theme.spacing.sm,
     },
     playButtonText: {
         fontSize: theme.fontSize.md,
-        fontWeight: theme.fontWeight.semibold,
+        fontWeight: '600',
         color: theme.colors.background,
     },
     shuffleButton: {
@@ -643,58 +804,82 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: theme.colors.surface,
-        paddingVertical: theme.spacing.md,
-        borderRadius: theme.borderRadius.full,
+        backgroundColor: 'rgba(27,31,43,0.6)',
+        paddingVertical: 14,
+        borderRadius: 14,
         gap: theme.spacing.sm,
         borderWidth: 1,
-        borderColor: theme.colors.border,
+        borderColor: 'rgba(192,200,214,0.08)',
     },
     shuffleButtonText: {
         fontSize: theme.fontSize.md,
-        fontWeight: theme.fontWeight.semibold,
+        fontWeight: '600',
         color: theme.colors.primary,
     },
-    tracksSection: {
-        marginTop: theme.spacing.md,
+    buttonDisabled: {
+        opacity: 0.35,
     },
-    sectionTitle: {
-        fontSize: theme.fontSize.lg,
-        fontWeight: theme.fontWeight.bold,
-        color: theme.colors.textPrimary,
+    // Tracks Section
+    tracksSection: {},
+    tracksSectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
         marginBottom: theme.spacing.sm,
+        marginLeft: theme.spacing.xs,
+    },
+    tracksSectionTitle: {
+        fontSize: theme.fontSize.xs,
+        fontWeight: '600',
+        color: theme.colors.textMuted,
+        letterSpacing: 1,
     },
     swipeHint: {
         fontSize: theme.fontSize.xs,
         color: theme.colors.textMuted,
-        marginBottom: theme.spacing.md,
+        marginBottom: theme.spacing.sm,
+        marginLeft: theme.spacing.xs,
+    },
+    tracksList: {
+        backgroundColor: 'rgba(27,31,43,0.6)',
+        borderRadius: 14,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.06)',
     },
     trackItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: theme.spacing.sm,
-        backgroundColor: theme.colors.background,
+        paddingVertical: 10,
+        paddingHorizontal: theme.spacing.md,
+        backgroundColor: 'transparent',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(192,200,214,0.04)',
     },
     trackItemActive: {
-        backgroundColor: theme.colors.surface,
-        marginHorizontal: -theme.spacing.sm,
-        paddingHorizontal: theme.spacing.sm,
-        borderRadius: theme.borderRadius.sm,
+        backgroundColor: 'rgba(108,134,168,0.1)',
+    },
+    trackNumberContainer: {
+        width: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     trackNumber: {
-        width: 24,
         fontSize: theme.fontSize.sm,
         color: theme.colors.textMuted,
-        textAlign: 'center',
+        fontWeight: '500',
+    },
+    trackNumberActive: {
+        color: theme.colors.primary,
     },
     trackCover: {
-        width: 44,
-        height: 44,
-        borderRadius: theme.borderRadius.sm,
+        width: 48,
+        height: 48,
+        borderRadius: 8,
         marginLeft: theme.spacing.sm,
     },
     trackCoverPlaceholder: {
-        backgroundColor: theme.colors.surfaceElevated,
+        backgroundColor: 'rgba(192,200,214,0.08)',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -704,7 +889,7 @@ const styles = StyleSheet.create({
     },
     trackTitle: {
         fontSize: theme.fontSize.md,
-        fontWeight: theme.fontWeight.medium,
+        fontWeight: '500',
         color: theme.colors.textPrimary,
     },
     trackTitleActive: {
@@ -719,9 +904,10 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.sm,
         color: theme.colors.textMuted,
         marginLeft: theme.spacing.md,
+        fontWeight: '500',
     },
-    nowPlaying: {
-        marginLeft: theme.spacing.sm,
+    trackDurationActive: {
+        color: theme.colors.primary,
     },
     deleteAction: {
         backgroundColor: theme.colors.error,
@@ -729,20 +915,41 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         width: 80,
         height: '100%',
+        gap: 2,
+    },
+    deleteActionText: {
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: '500',
     },
     emptyTracks: {
         alignItems: 'center',
         paddingVertical: theme.spacing.xxl,
+        backgroundColor: 'rgba(27,31,43,0.6)',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.06)',
+    },
+    emptyIconRing: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: 'rgba(108,134,168,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: theme.spacing.md,
     },
     emptyText: {
         fontSize: theme.fontSize.md,
-        color: theme.colors.textSecondary,
-        marginTop: theme.spacing.md,
+        fontWeight: '600',
+        color: theme.colors.textPrimary,
     },
     emptySubtext: {
         fontSize: theme.fontSize.sm,
         color: theme.colors.textMuted,
         marginTop: theme.spacing.xs,
+        textAlign: 'center',
+        paddingHorizontal: theme.spacing.xl,
     },
     errorText: {
         fontSize: theme.fontSize.md,
@@ -754,17 +961,19 @@ const styles = StyleSheet.create({
         marginTop: theme.spacing.lg,
         paddingHorizontal: theme.spacing.xl,
         paddingVertical: theme.spacing.md,
-        backgroundColor: theme.colors.surface,
-        borderRadius: theme.borderRadius.md,
+        backgroundColor: 'rgba(27,31,43,0.6)',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.08)',
     },
     retryText: {
         color: theme.colors.primary,
-        fontWeight: theme.fontWeight.semibold,
+        fontWeight: '600',
     },
-    // Modal styles
+    // Modal
     modalContainer: {
         flex: 1,
-        backgroundColor: theme.colors.surface,
+        backgroundColor: theme.colors.background,
     },
     modalHeader: {
         flexDirection: 'row',
@@ -772,11 +981,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: theme.spacing.lg,
         borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border,
+        borderBottomColor: 'rgba(192,200,214,0.06)',
     },
     modalTitle: {
         fontSize: theme.fontSize.lg,
-        fontWeight: theme.fontWeight.bold,
+        fontWeight: '700',
         color: theme.colors.textPrimary,
     },
     cancelText: {
@@ -785,30 +994,79 @@ const styles = StyleSheet.create({
     },
     saveText: {
         fontSize: theme.fontSize.md,
-        fontWeight: theme.fontWeight.semibold,
+        fontWeight: '600',
         color: theme.colors.primary,
     },
     saveTextDisabled: {
-        opacity: 0.5,
+        opacity: 0.4,
     },
     editForm: {
         padding: theme.spacing.lg,
     },
-    inputLabel: {
-        fontSize: theme.fontSize.sm,
-        fontWeight: theme.fontWeight.semibold,
-        color: theme.colors.textSecondary,
+    coverPicker: {
+        width: 140,
+        height: 140,
+        borderRadius: 14,
+        alignSelf: 'center',
         marginBottom: theme.spacing.xs,
+        overflow: 'hidden',
+    },
+    coverPickerImage: {
+        width: '100%',
+        height: '100%',
+    },
+    coverPickerPlaceholder: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'rgba(27,31,43,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.08)',
+        borderRadius: 14,
+    },
+    coverPickerOverlay: {
+        position: 'absolute',
+        bottom: 8,
+        right: 8,
+    },
+    coverPickerBadge: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: theme.colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    coverPickerLoading: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    coverHint: {
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textMuted,
+        textAlign: 'center',
+        marginBottom: theme.spacing.lg,
+    },
+    inputLabel: {
+        fontSize: theme.fontSize.xs,
+        fontWeight: '600',
+        color: theme.colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: theme.spacing.sm,
         marginTop: theme.spacing.md,
     },
     input: {
-        backgroundColor: theme.colors.background,
-        borderRadius: theme.borderRadius.md,
+        backgroundColor: 'rgba(27,31,43,0.6)',
+        borderRadius: 12,
         padding: theme.spacing.md,
         fontSize: theme.fontSize.md,
         color: theme.colors.textPrimary,
         borderWidth: 1,
-        borderColor: theme.colors.border,
+        borderColor: 'rgba(192,200,214,0.08)',
     },
     textArea: {
         height: 100,

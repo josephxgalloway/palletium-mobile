@@ -14,8 +14,6 @@ import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,8 +25,6 @@ import Toast from 'react-native-toast-message';
 
 type PlanType = 'basic' | 'premium';
 type BillingInterval = 'monthly' | 'yearly';
-
-const { width } = Dimensions.get('window');
 
 const TIER_COLORS = {
   basic: ['#4A5568', '#2D3748'] as const,
@@ -81,11 +77,8 @@ export default function SubscriptionScreen() {
   };
 
   const getPlanId = useCallback(() => {
-    if (isArtist) {
-      return 'artist_pro_yearly';
-    }
     return `listener_${selectedPlan}_${billingInterval === 'monthly' ? 'monthly' : 'yearly'}`;
-  }, [isArtist, selectedPlan, billingInterval]);
+  }, [selectedPlan, billingInterval]);
 
   const getCurrentPlanPrice = () => {
     const planId = getPlanId();
@@ -99,26 +92,6 @@ export default function SubscriptionScreen() {
   };
 
   const handleCheckout = async () => {
-    // CONTAINMENT: Artist verification requires Stripe Elements (card entry) — only
-    // available on web. Mobile cannot securely embed Stripe Elements. This is a
-    // capability gap, not the intended end state.
-    // TODO: Prefer a dedicated web route e.g. /settings/billing?intent=artist_verification
-    // once the web platform supports intent-based deep links. Current URL uses hash
-    // navigation which is fragile.
-    if (isArtist) {
-      setCheckoutLoading(true);
-      try {
-        await WebBrowser.openAuthSessionAsync(
-          'https://palletium.com/settings?tab=billing#verification',
-          'palletium://settings/subscription'
-        );
-        await fetchStatus();
-      } finally {
-        setCheckoutLoading(false);
-      }
-      return;
-    }
-
     setCheckoutLoading(true);
     try {
       const planId = getPlanId();
@@ -217,7 +190,7 @@ export default function SubscriptionScreen() {
           </Text>
           <Text style={styles.heroSubtitle}>
             {isArtist
-              ? 'Unlock $1.00/play rate from subscribed listeners'
+              ? 'Subscribe to earn listener rewards when you stream other artists'
               : isNewUser
                 ? '7-day free trial — cancel anytime'
                 : 'Earn rewards while you listen'}
@@ -253,7 +226,7 @@ export default function SubscriptionScreen() {
         )}
 
         {/* Billing Toggle */}
-        {!isSubscribed && !isArtist && (
+        {!isSubscribed && (
           <View style={styles.billingToggleContainer}>
             <View style={styles.billingToggle}>
               <TouchableOpacity
@@ -298,7 +271,7 @@ export default function SubscriptionScreen() {
         )}
 
         {/* Plan Cards */}
-        {!isSubscribed && !isArtist && (
+        {!isSubscribed && (
           <View style={styles.planCardsContainer}>
             {/* Basic Plan */}
             <TouchableOpacity
@@ -334,12 +307,10 @@ export default function SubscriptionScreen() {
                 )}
 
                 <View style={styles.featureList}>
-                  <FeatureItem text="Uninterrupted listening" included />
+                  <FeatureItem text="Unlimited streaming" included />
                   <FeatureItem text="Earn listener rewards" included />
-                  <FeatureItem text="Offline downloads" included />
-                  <FeatureItem text="High-quality audio" included />
-                  <FeatureItem text="1.5× rewards bonus" included={false} />
-                  <FeatureItem text="Early access" included={false} />
+                  <FeatureItem text="Support independent artists" included />
+                  <FeatureItem text="1.5× rewards multiplier" included={false} />
                 </View>
               </LinearGradient>
             </TouchableOpacity>
@@ -384,80 +355,29 @@ export default function SubscriptionScreen() {
 
                 <View style={styles.featureList}>
                   <FeatureItem text="Everything in Basic" included highlight />
-                  <FeatureItem text="1.5× rewards earnings" included highlight />
-                  <FeatureItem text="Early access to releases" included />
-                  <FeatureItem text="Exclusive content" included />
-                  <FeatureItem text="Priority support" included />
-                  <FeatureItem text="Premium badge" included />
+                  <FeatureItem text="1.5× rewards multiplier" included highlight />
                 </View>
               </LinearGradient>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Artist Verification Card */}
+        {/* Artist verification note */}
         {!isSubscribed && isArtist && (
-          <View style={styles.artistProContainer}>
-            <LinearGradient
-              colors={['#1A472A', '#0D2818']}
-              style={styles.artistProCard}
-            >
-              <View style={styles.artistProHeader}>
-                <Ionicons name="mic" size={32} color="#10B981" />
-                <Text style={styles.artistProTitle}>Artist Verification</Text>
-              </View>
-
-              <View style={styles.priceContainer}>
-                <Text style={styles.priceCurrency}>$</Text>
-                <Text style={styles.priceAmount}>49.99</Text>
-                <Text style={styles.pricePeriod}>/year</Text>
-              </View>
-              <Text style={styles.billedText}>Just $4.17/month</Text>
-
-              <View style={styles.artistProFeatures}>
-                <View style={styles.artistProFeatureRow}>
-                  <View style={styles.artistProFeature}>
-                    <Ionicons name="cash" size={24} color="#10B981" />
-                    <Text style={styles.artistProFeatureText}>$1.00/Play</Text>
-                    <Text style={styles.artistProFeatureSubtext}>From subscribed listeners</Text>
-                  </View>
-                  <View style={styles.artistProFeature}>
-                    <Ionicons name="analytics" size={24} color="#10B981" />
-                    <Text style={styles.artistProFeatureText}>Analytics</Text>
-                    <Text style={styles.artistProFeatureSubtext}>Advanced insights</Text>
-                  </View>
-                </View>
-                <View style={styles.artistProFeatureRow}>
-                  <View style={styles.artistProFeature}>
-                    <Ionicons name="megaphone" size={24} color="#10B981" />
-                    <Text style={styles.artistProFeatureText}>Promo Tools</Text>
-                    <Text style={styles.artistProFeatureSubtext}>Reach more fans</Text>
-                  </View>
-                  <View style={styles.artistProFeature}>
-                    <Ionicons name="shield-checkmark" size={24} color="#10B981" />
-                    <Text style={styles.artistProFeatureText}>Verified</Text>
-                    <Text style={styles.artistProFeatureSubtext}>Artist badge</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.comparisonBox}>
-                <Text style={styles.comparisonTitle}>vs Unverified</Text>
-                <View style={styles.comparisonRow}>
-                  <Text style={styles.comparisonLabel}>First Listen Rate</Text>
-                  <Text style={styles.comparisonFree}>$0.004</Text>
-                  <Ionicons name="arrow-forward" size={16} color={theme.colors.textMuted} />
-                  <Text style={styles.comparisonPro}>$1.00</Text>
-                </View>
-                <View style={styles.comparisonRow}>
-                  <Text style={styles.comparisonLabel}>Upload Limit</Text>
-                  <Text style={styles.comparisonFree}>3</Text>
-                  <Ionicons name="arrow-forward" size={16} color={theme.colors.textMuted} />
-                  <Text style={styles.comparisonPro}>∞</Text>
-                </View>
-              </View>
-            </LinearGradient>
-          </View>
+          <TouchableOpacity
+            style={styles.verificationNote}
+            onPress={() => router.push('/settings/verification' as any)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="shield-checkmark-outline" size={20} color="#10B981" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.verificationNoteTitle}>Looking for artist verification?</Text>
+              <Text style={styles.verificationNoteText}>
+                Verification unlocks higher earning rates and unlimited uploads. It's separate from the listener subscription above.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+          </TouchableOpacity>
         )}
 
         {/* CTA Button */}
@@ -479,9 +399,7 @@ export default function SubscriptionScreen() {
               ) : (
                 <>
                   <Text style={styles.ctaText}>
-                    {isArtist
-                      ? 'Get Verified on Web'
-                      : `Get ${selectedPlan === 'premium' ? 'Premium' : 'Basic'}`}
+                    {`Get ${selectedPlan === 'premium' ? 'Premium' : 'Basic'}`}
                   </Text>
                   <Text style={styles.ctaPrice}>
                     ${getCurrentPlanPrice()}/{billingInterval === 'monthly' ? 'mo' : 'yr'}
@@ -784,85 +702,27 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
     fontWeight: '600',
   },
-  artistProContainer: {
-    marginBottom: theme.spacing.lg,
-  },
-  artistProCard: {
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.xl,
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  artistProHeader: {
+  verificationNote: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
-  },
-  artistProTitle: {
-    fontSize: theme.fontSize.xxl,
-    fontWeight: 'bold',
-    color: '#10B981',
-  },
-  artistProFeatures: {
-    gap: theme.spacing.md,
-    marginVertical: theme.spacing.lg,
-  },
-  artistProFeatureRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-  },
-  artistProFeature: {
-    flex: 1,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: theme.colors.surface,
     padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    alignItems: 'center',
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: theme.spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
-  artistProFeatureText: {
+  verificationNoteTitle: {
     color: theme.colors.textPrimary,
     fontWeight: '600',
-    marginTop: theme.spacing.xs,
     fontSize: theme.fontSize.sm,
+    marginBottom: 2,
   },
-  artistProFeatureSubtext: {
+  verificationNoteText: {
     color: theme.colors.textMuted,
     fontSize: theme.fontSize.xs,
-  },
-  comparisonBox: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-  },
-  comparisonTitle: {
-    color: theme.colors.textMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: 'bold',
-    marginBottom: theme.spacing.sm,
-  },
-  comparisonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.xs,
-  },
-  comparisonLabel: {
-    flex: 1,
-    color: theme.colors.textSecondary,
-    fontSize: theme.fontSize.sm,
-  },
-  comparisonFree: {
-    color: theme.colors.textMuted,
-    fontSize: theme.fontSize.sm,
-    width: 40,
-    textAlign: 'center',
-  },
-  comparisonPro: {
-    color: '#10B981',
-    fontWeight: 'bold',
-    fontSize: theme.fontSize.sm,
-    width: 40,
-    textAlign: 'center',
+    lineHeight: 18,
   },
   ctaButton: {
     marginBottom: theme.spacing.lg,

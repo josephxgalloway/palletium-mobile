@@ -5,6 +5,7 @@ import {
     followArtist,
     unfollowArtist
 } from '@/lib/api/client';
+import SupportersModal from '@/components/SupportersModal';
 import { useAuthStore } from '@/lib/store/authStore';
 import { usePlayerStore } from '@/lib/store/playerStore';
 import type { Artist, Track } from '@/types';
@@ -17,6 +18,7 @@ import {
     ActivityIndicator,
     FlatList,
     Image,
+    Pressable,
     RefreshControl,
     StyleSheet,
     Text,
@@ -38,6 +40,8 @@ export default function ArtistDetailScreen() {
     const [error, setError] = useState<string | null>(null);
     const [isFollowing, setIsFollowing] = useState(false);
     const [followLoading, setFollowLoading] = useState(false);
+    const [supportersModalVisible, setSupportersModalVisible] = useState(false);
+    const [supportersModalMode, setSupportersModalMode] = useState<'followers' | 'following'>('followers');
 
     const isOwnProfile = user?.type === 'artist' && user?.id === Number(id);
 
@@ -174,13 +178,6 @@ export default function ArtistDetailScreen() {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const getArtistTierLabel = (level: number) => {
-        if (level >= 40) return 'Icon';
-        if (level >= 25) return 'Established';
-        if (level >= 10) return 'Rising Star';
-        return 'Emerging';
-    };
-
     const renderHeader = () => {
         if (!artist) return null;
 
@@ -210,15 +207,6 @@ export default function ArtistDetailScreen() {
                             {artist.handle && (
                                 <Text style={styles.handle}>@{artist.handle}</Text>
                             )}
-                            <View style={styles.statsRow}>
-                                <Text style={styles.statText}>
-                                    {formatNumber(artist.follower_count)} followers
-                                </Text>
-                                <Text style={styles.statDivider}>·</Text>
-                                <Text style={styles.statText}>
-                                    Level {artist.level}
-                                </Text>
-                            </View>
                         </View>
 
                         {!isOwnProfile && (
@@ -244,10 +232,23 @@ export default function ArtistDetailScreen() {
                         )}
                     </View>
 
-                    {/* Artist Tier Badge */}
-                    <View style={styles.tierBadge}>
-                        <Ionicons name="star" size={14} color={theme.colors.accent} />
-                        <Text style={styles.tierText}>{getArtistTierLabel(artist.level)}</Text>
+                    {/* Followers / Following */}
+                    <View style={styles.supportRow}>
+                        <Pressable
+                            style={styles.supportBox}
+                            onPress={() => { setSupportersModalMode('followers'); setSupportersModalVisible(true); }}
+                        >
+                            <Text style={styles.supportCount}>{formatNumber(artist.follower_count)}</Text>
+                            <Text style={styles.supportLabel}>Followers</Text>
+                        </Pressable>
+                        <View style={styles.supportDivider} />
+                        <Pressable
+                            style={styles.supportBox}
+                            onPress={() => { setSupportersModalMode('following'); setSupportersModalVisible(true); }}
+                        >
+                            <Text style={styles.supportCount}>{formatNumber(artist.following_count ?? 0)}</Text>
+                            <Text style={styles.supportLabel}>Following</Text>
+                        </Pressable>
                     </View>
 
                     {/* Bio */}
@@ -255,7 +256,7 @@ export default function ArtistDetailScreen() {
                         <Text style={styles.bio} numberOfLines={4}>{artist.bio}</Text>
                     )}
 
-                    {/* Stats Cards - Only show earnings if own profile */}
+                    {/* Stats Cards */}
                     <View style={styles.statsCards}>
                         <View style={styles.statCard}>
                             <Text style={styles.statCardValue}>{formatNumber(artist.total_plays)}</Text>
@@ -264,6 +265,10 @@ export default function ArtistDetailScreen() {
                         <View style={styles.statCard}>
                             <Text style={styles.statCardValue}>{artist.track_count || tracks.length}</Text>
                             <Text style={styles.statCardLabel}>Tracks</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                            <Text style={styles.statCardValue}>{artist.level}</Text>
+                            <Text style={styles.statCardLabel}>Level</Text>
                         </View>
                         {isOwnProfile && artist.total_earnings !== undefined && (
                             <View style={styles.statCard}>
@@ -326,7 +331,7 @@ export default function ArtistDetailScreen() {
                         {item.title}
                     </Text>
                     <Text style={styles.trackMeta}>
-                        {formatNumber(item.play_count || 0)} plays
+                        {formatNumber(item.organic_play_count ?? item.play_count ?? 0)} plays
                     </Text>
                 </View>
 
@@ -402,6 +407,14 @@ export default function ArtistDetailScreen() {
                     </View>
                 }
             />
+
+            <SupportersModal
+                visible={supportersModalVisible}
+                onClose={() => setSupportersModalVisible(false)}
+                artistId={artist.id}
+                artistName={artist.name}
+                mode={supportersModalMode}
+            />
         </SafeAreaView>
     );
 }
@@ -475,18 +488,33 @@ const styles = StyleSheet.create({
         color: theme.colors.textMuted,
         marginTop: 2,
     },
-    statsRow: {
+    supportRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: theme.spacing.xs,
+        marginBottom: theme.spacing.md,
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.md,
+        overflow: 'hidden',
     },
-    statText: {
-        fontSize: theme.fontSize.sm,
+    supportBox: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: theme.spacing.md,
+    },
+    supportCount: {
+        fontSize: theme.fontSize.lg,
+        fontWeight: '700' as const,
+        color: theme.colors.textPrimary,
+    },
+    supportLabel: {
+        fontSize: theme.fontSize.xs,
         color: theme.colors.textSecondary,
+        marginTop: 2,
     },
-    statDivider: {
-        color: theme.colors.textMuted,
-        marginHorizontal: theme.spacing.sm,
+    supportDivider: {
+        width: 1,
+        height: 32,
+        backgroundColor: theme.colors.border,
     },
     followButton: {
         backgroundColor: theme.colors.primary,
@@ -508,22 +536,6 @@ const styles = StyleSheet.create({
     },
     followingButtonText: {
         color: theme.colors.primary,
-    },
-    tierBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        backgroundColor: theme.colors.surface,
-        paddingHorizontal: theme.spacing.md,
-        paddingVertical: theme.spacing.xs,
-        borderRadius: theme.borderRadius.full,
-        gap: theme.spacing.xs,
-        marginBottom: theme.spacing.md,
-    },
-    tierText: {
-        fontSize: theme.fontSize.sm,
-        fontWeight: theme.fontWeight.medium,
-        color: theme.colors.accent,
     },
     bio: {
         fontSize: theme.fontSize.md,

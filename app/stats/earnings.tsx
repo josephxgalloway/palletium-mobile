@@ -32,10 +32,12 @@ interface EarningsSummary {
     first_listen_earnings: number;
     repeat_listen_earnings: number;
     base_rate_earnings: number;
+    self_play_earnings: number;
     total_plays: number;
     first_listens: number;
     repeat_listens: number;
     base_rate_plays: number;
+    self_play_count: number;
     unique_listeners: number;
 }
 
@@ -92,18 +94,24 @@ function ArtistEarningsScreen() {
                 const firstListens = analyticsData.firstListens || analyticsData.discoveries || 0;
                 const repeatListens = analyticsData.repeatListens || 0;
                 const baseRatePlays = analyticsData.baseRatePlays || 0;
+                // Derive self-play count from API or from gap between total and known categories
+                const totalPlays = analyticsData.totalPlays || 0;
+                const selfPlayCount = analyticsData.selfPlayCount
+                    || Math.max(0, totalPlays - firstListens - repeatListens - baseRatePlays);
 
                 // Prefer API per-type earnings (settled truth via SUM(payment_amount)) when available.
                 // Fall back to proportional derivation for pre-F1 API versions.
                 let firstListenCents: number;
                 let repeatListenCents: number;
                 let baseRateCents: number;
+                let selfPlayCents: number;
 
                 if (analyticsData.firstListenEarnings != null && analyticsData.repeatListenEarnings != null) {
                     // API returns settled amounts in dollars
                     firstListenCents = Math.round((analyticsData.firstListenEarnings || 0) * 100);
                     repeatListenCents = Math.round((analyticsData.repeatListenEarnings || 0) * 100);
                     baseRateCents = Math.round((analyticsData.baseRateEarnings || 0) * 100);
+                    selfPlayCents = Math.round((analyticsData.selfPlayEarnings || 0) * 100);
                 } else {
                     // Fallback: derive proportionally from total using formula rates
                     const derivedRepeatListens = (analyticsData.totalPlays || 0) - firstListens;
@@ -118,6 +126,7 @@ function ArtistEarningsScreen() {
                         ? totalEarningsCents - firstListenCents
                         : 0;
                     baseRateCents = 0; // Legacy API doesn't distinguish base rate
+                    selfPlayCents = 0;
                 }
 
                 detailedSummary = {
@@ -127,10 +136,12 @@ function ArtistEarningsScreen() {
                     first_listen_earnings: firstListenCents,
                     repeat_listen_earnings: repeatListenCents,
                     base_rate_earnings: baseRateCents,
+                    self_play_earnings: selfPlayCents,
                     total_plays: analyticsData.totalPlays || 0,
                     first_listens: firstListens,
                     repeat_listens: repeatListens,
                     base_rate_plays: baseRatePlays,
+                    self_play_count: selfPlayCount,
                     unique_listeners: analyticsData.uniqueListeners || 0,
                 };
             } else {
@@ -159,10 +170,12 @@ function ArtistEarningsScreen() {
                     first_listen_earnings: dbFirstCents,
                     repeat_listen_earnings: dbRepeatCents,
                     base_rate_earnings: 0, // Dashboard fallback doesn't distinguish base rate
+                    self_play_earnings: 0,
                     total_plays: dashboardData.total_plays || 0,
                     first_listens: dbFirstListens,
                     repeat_listens: dbRepeatListens,
                     base_rate_plays: 0,
+                    self_play_count: 0,
                     unique_listeners: dashboardData.unique_listeners || 0,
                 };
             }
@@ -318,6 +331,26 @@ function ArtistEarningsScreen() {
                                     <Text style={styles.breakdownAmount}>
                                         ${((summary?.base_rate_earnings || 0) / 100).toFixed(2)}
                                     </Text>
+                                </View>
+                            </View>
+                        </>
+                    )}
+
+                    {(summary?.self_play_count || 0) > 0 && (
+                        <>
+                            <View style={styles.breakdownDivider} />
+
+                            <View style={styles.breakdownRow}>
+                                <View style={styles.breakdownItem}>
+                                    <View style={[styles.dot, { backgroundColor: theme.colors.textMuted }]} />
+                                    <View>
+                                        <Text style={styles.breakdownLabel}>Self-Plays</Text>
+                                        <Text style={styles.breakdownSubtext}>$0.00 — not paid</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.breakdownValues}>
+                                    <Text style={styles.breakdownCount}>{formatNumber(summary?.self_play_count || 0)}</Text>
+                                    <Text style={styles.breakdownAmount}>$0.00</Text>
                                 </View>
                             </View>
                         </>

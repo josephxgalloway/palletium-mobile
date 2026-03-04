@@ -16,7 +16,7 @@ import { likeTrack, unlikeTrack, getTrackInteraction } from '@/lib/api/client';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useFloat, useGlow, usePressScale } from '@/hooks/usePlayerAnimations';
-import ProgressSlider from '@/components/player/ProgressSlider';
+import WaveformSlider from '@/components/player/WaveformSlider';
 import EarningsTicker from '@/components/player/EarningsTicker';
 
 const { width } = Dimensions.get('window');
@@ -257,11 +257,12 @@ export default function PlayerScreen() {
         </Animated.View>
       </View>
 
-      {/* Custom progress slider */}
-      <ProgressSlider
+      {/* Waveform seek bar */}
+      <WaveformSlider
         position={position}
         duration={duration}
         onSeek={seekTo}
+        isPlaying={isPlaying}
         disabled={isPreviewMode}
       />
 

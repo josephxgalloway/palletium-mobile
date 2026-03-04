@@ -252,6 +252,16 @@ export const unfollowArtist = async (id: number) => {
   return response.data;
 };
 
+export const getArtistFollowers = async (id: number, limit = 50, offset = 0) => {
+  const response = await api.get(`/artists/${id}/followers`, { params: { limit, offset } });
+  return response.data;
+};
+
+export const getUserFollowing = async (id: number, limit = 50, offset = 0) => {
+  const response = await api.get(`/users/${id}/following`, { params: { limit, offset } });
+  return response.data;
+};
+
 // Playlist Detail
 export const getPlaylist = async (id: number) => {
   const response = await api.get(`/playlists/${id}`);
@@ -280,6 +290,34 @@ export const reorderPlaylistTracks = async (playlistId: number, trackIds: number
 
 export const updatePlaylist = async (id: number, data: { name?: string, description?: string, is_public?: boolean }) => {
   const response = await api.put(`/playlists/${id}`, data);
+  return response.data;
+};
+
+export const createPlaylist = async (data: { name: string, description?: string, is_public?: boolean }) => {
+  const response = await api.post('/playlists', data);
+  return response.data;
+};
+
+export const uploadPlaylistCover = async (playlistId: number, imageUri: string) => {
+  const formData = new FormData();
+  const filename = imageUri.split('/').pop() || 'cover.jpg';
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+  formData.append('coverImage', {
+    uri: imageUri,
+    name: filename,
+    type,
+  } as any);
+
+  const response = await api.post(`/playlists/${playlistId}/cover`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const deletePlaylist = async (id: number) => {
+  const response = await api.delete(`/playlists/${id}`);
   return response.data;
 };
 

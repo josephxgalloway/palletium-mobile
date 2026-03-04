@@ -406,9 +406,8 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   logo: {
-    width: 100,
-    height: 100,
-    borderRadius: 20,
+    width: 120,
+    height: 120,
     alignSelf: 'center',
   },
   twoFactorIcon: {

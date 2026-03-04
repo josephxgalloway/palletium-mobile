@@ -2,9 +2,10 @@ import { theme } from '@/constants/theme';
 import { getUserEntitlements } from '@/lib/entitlements';
 import { useAuthStore } from '@/lib/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
@@ -13,10 +14,8 @@ export default function SettingsScreen() {
     const { isVerifiedArtist, isAdmin } = getUserEntitlements(user);
     const isArtistType = user?.type === 'artist';
 
-    // Local state for toggles (mocked for now)
     const [highQualityAudio, setHighQualityAudio] = useState(true);
     const [dataSaver, setDataSaver] = useState(false);
-    const [downloadCellular, setDownloadCellular] = useState(false);
 
     const handleLogout = () => {
         Alert.alert(
@@ -57,9 +56,12 @@ export default function SettingsScreen() {
         );
     };
 
-    const SettingSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
+    const SettingSection = ({ title, icon, children }: { title: string, icon: keyof typeof Ionicons.glyphMap, children: React.ReactNode }) => (
         <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{title}</Text>
+            <View style={styles.sectionHeader}>
+                <Ionicons name={icon} size={16} color={theme.colors.textMuted} />
+                <Text style={styles.sectionTitle}>{title}</Text>
+            </View>
             <View style={styles.sectionContent}>
                 {children}
             </View>
@@ -71,23 +73,25 @@ export default function SettingsScreen() {
         label,
         value,
         onPress,
-        type = 'link'
+        type = 'link',
+        iconColor,
     }: {
-        icon: any,
+        icon: keyof typeof Ionicons.glyphMap,
         label: string,
         value?: string | boolean,
         onPress?: () => void,
-        type?: 'link' | 'toggle' | 'info'
+        type?: 'link' | 'toggle' | 'info',
+        iconColor?: string,
     }) => (
         <TouchableOpacity
             style={styles.row}
             onPress={type === 'toggle' ? onPress : onPress}
             disabled={type === 'info'}
-            activeOpacity={type === 'info' ? 1 : 0.7}
+            activeOpacity={type === 'info' ? 1 : 0.6}
         >
             <View style={styles.rowLeft}>
-                <View style={styles.iconContainer}>
-                    <Ionicons name={icon} size={20} color={theme.colors.textSecondary} />
+                <View style={[styles.iconContainer, iconColor ? { backgroundColor: `${iconColor}15` } : null]}>
+                    <Ionicons name={icon} size={18} color={iconColor || theme.colors.textSecondary} />
                 </View>
                 <Text style={styles.rowLabel}>{label}</Text>
             </View>
@@ -121,6 +125,12 @@ export default function SettingsScreen() {
         <SafeAreaView style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
 
+            <LinearGradient
+                colors={['rgba(108,134,168,0.08)', 'transparent']}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+            />
+
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
@@ -129,12 +139,12 @@ export default function SettingsScreen() {
                 <View style={{ width: 40 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
                 {/* Account Section */}
-                <SettingSection title="Account">
+                <SettingSection title="Account" icon="person-outline">
                     <SettingRow
-                        icon="person-outline"
+                        icon="mail-outline"
                         label="Email"
                         value={user?.email}
                         type="info"
@@ -144,6 +154,7 @@ export default function SettingsScreen() {
                             icon="card-outline"
                             label="Subscription"
                             value="Free"
+                            iconColor="#6c86a8"
                             onPress={() => router.push('/settings/subscription' as any)}
                         />
                     )}
@@ -152,14 +163,15 @@ export default function SettingsScreen() {
                             icon="shield-checkmark-outline"
                             label="Artist Verification"
                             value={isVerifiedArtist ? 'Verified' : 'Not verified'}
+                            iconColor={isVerifiedArtist ? '#10B981' : '#F59E0B'}
                             onPress={() => router.push('/settings/verification' as any)}
                         />
                     )}
                 </SettingSection>
 
-                {/* Audio Quality (hidden for admins) */}
+                {/* Audio Quality */}
                 {!isAdmin && (
-                    <SettingSection title="Audio Quality">
+                    <SettingSection title="Audio" icon="musical-notes-outline">
                         <SettingRow
                             icon="wifi-outline"
                             label="High Quality (WiFi)"
@@ -177,25 +189,36 @@ export default function SettingsScreen() {
                     </SettingSection>
                 )}
 
-                {/* Cache & Storage */}
-                <SettingSection title="Storage">
+                {/* Storage */}
+                <SettingSection title="Storage" icon="folder-outline">
                     <SettingRow
                         icon="trash-bin-outline"
                         label="Clear Cache"
                         onPress={clearCache}
                         value="124 MB"
+                        iconColor={theme.colors.error}
+                    />
+                </SettingSection>
+
+                {/* Support */}
+                <SettingSection title="Support" icon="help-buoy-outline">
+                    <SettingRow
+                        icon="chatbubble-ellipses-outline"
+                        label="Help & Support"
+                        iconColor="#6c86a8"
+                        onPress={() => router.push('/settings/support' as any)}
                     />
                 </SettingSection>
 
                 {/* About & Legal */}
-                <SettingSection title="About">
+                <SettingSection title="Legal" icon="document-text-outline">
                     <SettingRow
                         icon="document-text-outline"
                         label="Terms of Service"
                         onPress={() => router.push({ pathname: '/settings/legal', params: { type: 'terms' } } as any)}
                     />
                     <SettingRow
-                        icon="shield-checkmark-outline"
+                        icon="shield-outline"
                         label="Privacy Policy"
                         onPress={() => router.push({ pathname: '/settings/legal', params: { type: 'privacy' } } as any)}
                     />
@@ -207,11 +230,27 @@ export default function SettingsScreen() {
                     />
                 </SettingSection>
 
+                {/* Email Change Notice */}
+                <View style={styles.emailNotice}>
+                    <Ionicons name="mail-outline" size={16} color={theme.colors.textMuted} />
+                    <Text style={styles.emailNoticeText}>
+                        To change your email, please contact{' '}
+                        <Text
+                            style={styles.emailLink}
+                            onPress={() => Linking.openURL('mailto:support@palletium.com')}
+                        >
+                            support@palletium.com
+                        </Text>
+                    </Text>
+                </View>
+
+                {/* Logout */}
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <Ionicons name="log-out-outline" size={18} color={theme.colors.error} />
                     <Text style={styles.logoutText}>Log Out</Text>
                 </TouchableOpacity>
 
-                <Text style={styles.copyright}>© 2026 Palletium Inc.</Text>
+                <Text style={styles.copyright}>{'\u00A9'} 2026 Palletium Inc.</Text>
 
             </ScrollView>
         </SafeAreaView>
@@ -229,15 +268,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: theme.spacing.md,
         paddingVertical: theme.spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border,
     },
     backButton: {
         padding: 8,
     },
     headerTitle: {
         fontSize: theme.fontSize.lg,
-        fontWeight: 'bold',
+        fontWeight: '700',
         color: theme.colors.textPrimary,
     },
     content: {
@@ -245,35 +282,42 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
     },
     section: {
-        marginBottom: theme.spacing.xl,
+        marginBottom: theme.spacing.lg,
     },
-    sectionTitle: {
-        fontSize: theme.fontSize.sm,
-        fontWeight: '600',
-        color: theme.colors.textMuted,
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
         marginBottom: theme.spacing.sm,
         marginLeft: theme.spacing.xs,
+    },
+    sectionTitle: {
+        fontSize: theme.fontSize.xs,
+        fontWeight: '600',
+        color: theme.colors.textMuted,
         textTransform: 'uppercase',
         letterSpacing: 1,
     },
     sectionContent: {
-        backgroundColor: theme.colors.surface,
-        borderRadius: theme.borderRadius.md,
+        backgroundColor: 'rgba(27,31,43,0.6)',
+        borderRadius: 14,
         overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.06)',
     },
     row: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: theme.spacing.md,
-        backgroundColor: theme.colors.surface,
         borderBottomWidth: 1,
-        borderBottomColor: theme.colors.surfaceElevated,
+        borderBottomColor: 'rgba(192,200,214,0.04)',
     },
     rowLeft: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: theme.spacing.md,
+        flex: 1,
     },
     rowRight: {
         flexDirection: 'row',
@@ -282,7 +326,11 @@ const styles = StyleSheet.create({
     },
     iconContainer: {
         width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: 'rgba(192,200,214,0.06)',
         alignItems: 'center',
+        justifyContent: 'center',
     },
     rowLabel: {
         fontSize: theme.fontSize.md,
@@ -291,19 +339,40 @@ const styles = StyleSheet.create({
     rowValue: {
         fontSize: theme.fontSize.sm,
         color: theme.colors.textSecondary,
+        maxWidth: 180,
+    },
+    emailNotice: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.md,
+        marginBottom: theme.spacing.md,
+    },
+    emailNoticeText: {
+        flex: 1,
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textMuted,
+        lineHeight: 20,
+    },
+    emailLink: {
+        color: theme.colors.primary,
+        textDecorationLine: 'underline',
     },
     logoutButton: {
-        marginTop: theme.spacing.lg,
-        padding: theme.spacing.md,
-        backgroundColor: theme.colors.surface,
-        borderRadius: theme.borderRadius.md,
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        padding: theme.spacing.md,
+        backgroundColor: 'rgba(248,113,113,0.08)',
+        borderRadius: 14,
         borderWidth: 1,
-        borderColor: theme.colors.error,
+        borderColor: 'rgba(248,113,113,0.15)',
+        gap: theme.spacing.sm,
     },
     logoutText: {
         color: theme.colors.error,
-        fontWeight: 'bold',
+        fontWeight: '600',
         fontSize: theme.fontSize.md,
     },
     copyright: {

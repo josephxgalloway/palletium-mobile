@@ -28,6 +28,7 @@ export interface TrackMetadata {
   release_date?: string;
   contributors: Contributor[];
   play_count: number;
+  organic_play_count?: number;
   review_status: 'pending' | 'approved' | 'rejected';
   is_public: boolean;
   is_ai_generated?: boolean;

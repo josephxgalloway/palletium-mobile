@@ -22,6 +22,17 @@ import { theme } from '@/constants/theme';
 import type { Track } from '@/types';
 import { getArtistName, getCoverUrl, getDuration } from '@/types';
 
+interface SearchArtist {
+  id: number;
+  name: string;
+  slug?: string;
+  profile_image_url?: string;
+  bio?: string;
+  track_count?: number;
+  total_plays?: number;
+  follower_count?: number;
+}
+
 // Mood Radio station definitions
 interface RadioStation {
   id: string;
@@ -100,6 +111,7 @@ export default function DiscoverScreen() {
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [searchArtists, setSearchArtists] = useState<SearchArtist[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
   // Mood Radio state
@@ -132,20 +144,23 @@ export default function DiscoverScreen() {
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
       setSearchResults([]);
+      setSearchArtists([]);
       return;
     }
 
     const timeoutId = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const response = await api.get('/search', {
-          params: { q: searchQuery, type: 'tracks', limit: 20 },
+        const response = await api.get('/discovery/search', {
+          params: { q: searchQuery, type: 'all', limit: 30 },
         });
-        const results = response.data?.tracks || response.data?.results?.tracks || [];
-        setSearchResults(results);
+        const results = response.data?.results || response.data || {};
+        setSearchArtists(results.artists || []);
+        setSearchResults(results.tracks || []);
       } catch (err) {
         console.error('Search failed:', err);
         setSearchResults([]);
+        setSearchArtists([]);
       } finally {
         setSearchLoading(false);
       }
@@ -407,25 +422,86 @@ export default function DiscoverScreen() {
 
       {/* Content */}
       {isSearchActive ? (
-        <FlatList
-          data={searchResults}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderTrack}
+        <ScrollView
           contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            !searchLoading && searchQuery.length >= 2 ? (
-              <View style={styles.centered}>
-                <Ionicons name="search" size={48} color={theme.colors.textMuted} />
-                <Text style={styles.emptyText}>No results found</Text>
-                <Text style={styles.emptySubtext}>Try different keywords</Text>
-              </View>
-            ) : searchQuery.length > 0 && searchQuery.length < 2 ? (
-              <View style={styles.centered}>
-                <Text style={styles.emptySubtext}>Enter at least 2 characters to search</Text>
-              </View>
-            ) : null
-          }
-        />
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {searchLoading ? null : searchQuery.length >= 2 && searchArtists.length === 0 && searchResults.length === 0 ? (
+            <View style={styles.centered}>
+              <Ionicons name="search" size={48} color={theme.colors.textMuted} />
+              <Text style={styles.emptyText}>No results found</Text>
+              <Text style={styles.emptySubtext}>Try different keywords</Text>
+            </View>
+          ) : searchQuery.length > 0 && searchQuery.length < 2 ? (
+            <View style={styles.centered}>
+              <Text style={styles.emptySubtext}>Enter at least 2 characters to search</Text>
+            </View>
+          ) : (
+            <>
+              {/* Artist profiles with their tracks */}
+              {searchArtists.map((artist) => {
+                const artistTracks = searchResults.filter(
+                  (t) => t.artist_id === artist.id || (t as any).artistId === artist.id
+                );
+                return (
+                  <View key={`artist-${artist.id}`} style={styles.artistSection}>
+                    <Pressable
+                      style={styles.artistCard}
+                      onPress={() => router.push(`/artist/${artist.id}` as any)}
+                    >
+                      {artist.profile_image_url ? (
+                        <Image
+                          source={{ uri: artist.profile_image_url }}
+                          style={styles.artistAvatar}
+                          transition={200}
+                        />
+                      ) : (
+                        <View style={[styles.artistAvatar, styles.artistAvatarPlaceholder]}>
+                          <Ionicons name="person" size={24} color={theme.colors.textMuted} />
+                        </View>
+                      )}
+                      <View style={styles.artistInfo}>
+                        <Text style={styles.artistCardName} numberOfLines={1}>{artist.name}</Text>
+                        <Text style={styles.artistCardMeta} numberOfLines={1}>
+                          {artist.track_count ?? 0} tracks
+                          {artist.total_plays ? ` · ${artist.total_plays.toLocaleString()} plays` : ''}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+                    </Pressable>
+                    {artistTracks.map((track) => (
+                      <View key={`track-${track.id}`}>
+                        {renderTrack({ item: track })}
+                      </View>
+                    ))}
+                  </View>
+                );
+              })}
+
+              {/* Remaining tracks not matched to an artist result */}
+              {(() => {
+                const artistIds = new Set(searchArtists.map((a) => a.id));
+                const remaining = searchResults.filter(
+                  (t) => !artistIds.has(t.artist_id as number) && !artistIds.has((t as any).artistId as number)
+                );
+                if (remaining.length === 0) return null;
+                return (
+                  <View style={styles.artistSection}>
+                    {searchArtists.length > 0 && (
+                      <Text style={styles.searchSectionLabel}>More tracks</Text>
+                    )}
+                    {remaining.map((track) => (
+                      <View key={`track-${track.id}`}>
+                        {renderTrack({ item: track })}
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()}
+            </>
+          )}
+        </ScrollView>
       ) : activeTab === 'browse' ? (
         <>
           {error ? (
@@ -651,6 +727,56 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#fff',
+  },
+  // Search Results — Artists
+  artistSection: {
+    marginBottom: theme.spacing.md,
+  },
+  artistCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.md,
+    backgroundColor: 'rgba(108,134,168,0.12)',
+    borderRadius: 14,
+    marginBottom: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.1)',
+  },
+  artistAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.12)',
+  },
+  artistAvatarPlaceholder: {
+    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  artistInfo: {
+    flex: 1,
+    marginLeft: theme.spacing.md,
+  },
+  artistCardName: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    letterSpacing: 0.2,
+  },
+  artistCardMeta: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  searchSectionLabel: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   // Track List
   list: {

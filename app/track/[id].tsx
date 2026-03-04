@@ -346,7 +346,7 @@ export default function TrackDetailScreen() {
 
                     <View style={styles.statItem}>
                         <Ionicons name="play" size={18} color={theme.colors.textMuted} />
-                        <Text style={styles.statText}>{formatNumber(track.play_count || 0)} plays</Text>
+                        <Text style={styles.statText}>{formatNumber(track.organic_play_count ?? track.play_count ?? 0)} plays</Text>
                     </View>
 
                     {track.genre && (

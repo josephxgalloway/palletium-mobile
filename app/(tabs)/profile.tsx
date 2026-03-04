@@ -1,8 +1,9 @@
 import { theme } from '@/constants/theme';
 import { getUserEntitlements } from '@/lib/entitlements';
-import api, { getArtistTracks } from '@/lib/api/client';
+import api, { getArtistFollowers, getArtistTracks, getUserFollowing } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/authStore';
 import { useNetworkStore } from '@/lib/store/networkStore';
+import SupportersModal from '@/components/SupportersModal';
 import type { DashboardStats } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,6 +43,124 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [supportersModalVisible, setSupportersModalVisible] = useState(false);
+  const [supportersModalMode, setSupportersModalMode] = useState<'followers' | 'following'>('followers');
+  const [bannerImageUri, setBannerImageUri] = useState<string | null>(null);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+
+  // Load banner image from user profile (backend)
+  useEffect(() => {
+    if (user?.banner_image_url) {
+      setBannerImageUri(user.banner_image_url);
+    } else if (user?.id) {
+      // Fetch from profile endpoint as fallback
+      api.get(`/profiles/${user.id}`).then((res) => {
+        const url = res.data?.banner_image_url;
+        if (url) setBannerImageUri(url);
+      }).catch(() => {});
+    }
+  }, [user?.id, user?.banner_image_url]);
+
+  const handleChangeBanner = () => {
+    const options = ['Take Photo', 'Choose from Library', 'Cancel'];
+    const cancelButtonIndex = 2;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, cancelButtonIndex },
+        async (buttonIndex) => {
+          if (buttonIndex === 0) {
+            await pickBannerImage('camera');
+          } else if (buttonIndex === 1) {
+            await pickBannerImage('library');
+          }
+        }
+      );
+    } else {
+      Alert.alert('Change Header Photo', 'Select an option', [
+        { text: 'Take Photo', onPress: () => pickBannerImage('camera') },
+        { text: 'Choose from Library', onPress: () => pickBannerImage('library') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
+
+  const pickBannerImage = async (source: 'camera' | 'library') => {
+    if (!isImagePickerAvailable || !ImagePicker) {
+      Toast.show({
+        type: 'info',
+        text1: 'Not available in Expo Go',
+        text2: 'Use a development build to change your banner',
+      });
+      return;
+    }
+
+    try {
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Camera access is needed to take photos.');
+          return;
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Photo library access is needed to choose photos.');
+          return;
+        }
+      }
+
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: 'images' as const, allowsEditing: true, aspect: [3, 1] as [number, number], quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images' as const, allowsEditing: true, aspect: [3, 1] as [number, number], quality: 0.8 });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadBannerImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Banner image picker error:', error);
+      Toast.show({ type: 'error', text1: 'Failed to select image' });
+    }
+  };
+
+  const uploadBannerImage = async (uri: string) => {
+    setUploadingBanner(true);
+    // Show preview immediately
+    setBannerImageUri(uri);
+    try {
+      const formData = new FormData();
+      const filename = uri.split('/').pop() || 'banner.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      formData.append('bannerImage', {
+        uri,
+        name: filename,
+        type,
+      } as any);
+
+      const response = await api.post('/users/banner', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const newUrl = response.data?.bannerImageUrl || response.data?.banner_image_url;
+      if (newUrl) {
+        setBannerImageUri(newUrl);
+        updateUser({ banner_image_url: newUrl });
+      }
+      Toast.show({ type: 'success', text1: 'Header photo updated!' });
+    } catch (error: any) {
+      console.error('Banner upload error:', error);
+      // Revert preview on failure
+      setBannerImageUri(user?.banner_image_url || null);
+      const message = error.response?.data?.error || 'Failed to upload header photo';
+      Toast.show({ type: 'error', text1: message });
+    } finally {
+      setUploadingBanner(false);
+    }
+  };
 
   const handleChangePhoto = () => {
     const options = ['Take Photo', 'Choose from Library', 'Cancel'];
@@ -148,6 +267,20 @@ export default function ProfileScreen() {
   const fetchDashboard = useCallback(async () => {
     if (!isAuthenticated || !isConnected) return;
 
+    // Fetch supporter/supporting counts
+    if (user?.id) {
+      try {
+        const [followersData, followingData] = await Promise.all([
+          getArtistFollowers(user.id, 1, 0),
+          getUserFollowing(user.id, 1, 0),
+        ]);
+        setFollowerCount(followersData.total || 0);
+        setFollowingCount(followingData.total || 0);
+      } catch (err) {
+        console.log('Failed to fetch follow counts:', err);
+      }
+    }
+
     try {
       if (user?.type === 'artist' && user?.id) {
         try {
@@ -243,7 +376,7 @@ export default function ProfileScreen() {
   };
 
   const handleHelpSupport = () => {
-    router.push('/settings' as any);
+    router.push('/settings/support' as any);
   };
 
   // Not authenticated
@@ -316,46 +449,110 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Profile Header with Glow */}
-        <View style={styles.header}>
-          <Pressable onPress={handleChangePhoto} disabled={uploadingPhoto} style={styles.avatarContainer}>
-            <View style={styles.avatarGlow}>
-              {user.profile_image ? (
-                <Image source={{ uri: user.profile_image }} style={styles.avatar} transition={300} />
-              ) : (
-                <LinearGradient
-                  colors={['rgba(108,134,168,0.3)', 'rgba(192,200,214,0.2)']}
-                  style={[styles.avatar, styles.avatarPlaceholder]}
-                >
-                  <Text style={styles.avatarText}>
-                    {user.name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
-                  </Text>
-                </LinearGradient>
-              )}
-            </View>
-            {/* Camera icon overlay */}
-            <View style={styles.cameraIconContainer}>
-              {uploadingPhoto ? (
+        {/* Profile Header with Banner */}
+        <View style={styles.headerWrapper}>
+          {/* Tappable banner */}
+          <Pressable onPress={handleChangeBanner} disabled={uploadingBanner} style={styles.headerBanner}>
+            {bannerImageUri ? (
+              <Image source={{ uri: bannerImageUri }} style={styles.bannerImage} contentFit="cover" transition={300} />
+            ) : (
+              <LinearGradient
+                colors={
+                  isArtist
+                    ? ['#4a6a8a', '#6c86a8', '#3a5a7a']
+                    : ['#3a5a7a', '#6c86a8', '#4a6a8a']
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+            {/* Subtle overlay */}
+            <View style={styles.bannerOverlay} />
+            {/* Camera icon on banner */}
+            <View style={styles.bannerCameraIcon}>
+              {uploadingBanner ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Ionicons name="camera" size={14} color="#fff" />
               )}
             </View>
-          </Pressable>
-          <Text style={styles.name}>{user.name || 'Palletium User'}</Text>
-          <Text style={styles.email}>{user.email}</Text>
-          <View style={styles.badge}>
-            <Ionicons
-              name={isArtist ? 'musical-notes' : 'headset'}
-              size={14}
-              color={theme.colors.accent}
-            />
-            <Text style={styles.badgeText}>{roleLabel}</Text>
             {isVerifiedArtist && (
-              <Ionicons name="shield-checkmark" size={14} color={theme.colors.success} />
+              <View style={styles.bannerBadge}>
+                <Ionicons name="shield-checkmark" size={12} color="#fff" />
+                <Text style={styles.bannerBadgeText}>Verified</Text>
+              </View>
             )}
+          </Pressable>
+
+          {/* Avatar positioned overlapping banner */}
+          <View style={styles.header}>
+            <Pressable onPress={handleChangePhoto} disabled={uploadingPhoto} style={styles.avatarContainer}>
+              <View style={styles.avatarGlow}>
+                {user.profile_image ? (
+                  <Image source={{ uri: user.profile_image }} style={styles.avatar} transition={300} />
+                ) : (
+                  <LinearGradient
+                    colors={['rgba(108,134,168,0.3)', 'rgba(192,200,214,0.2)']}
+                    style={[styles.avatar, styles.avatarPlaceholder]}
+                  >
+                    <Text style={styles.avatarText}>
+                      {user.name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
+                    </Text>
+                  </LinearGradient>
+                )}
+              </View>
+              {/* Camera icon overlay */}
+              <View style={styles.cameraIconContainer}>
+                {uploadingPhoto ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="camera" size={14} color="#fff" />
+                )}
+              </View>
+            </Pressable>
+            <Text style={styles.name}>{user.name || 'Palletium User'}</Text>
+            <Text style={styles.email}>{user.email}</Text>
+            <View style={styles.badge}>
+              <Ionicons
+                name={isArtist ? 'musical-notes' : 'headset'}
+                size={14}
+                color={theme.colors.accent}
+              />
+              <Text style={styles.badgeText}>{roleLabel}</Text>
+              {isVerifiedArtist && (
+                <Ionicons name="shield-checkmark" size={14} color={theme.colors.success} />
+              )}
+            </View>
           </View>
         </View>
+
+        {/* Followers / Following */}
+        {!loading && !isAdmin && (
+          <View style={styles.supportRow}>
+            <Pressable
+              style={styles.supportBox}
+              onPress={() => {
+                setSupportersModalMode('followers');
+                setSupportersModalVisible(true);
+              }}
+            >
+              <Text style={styles.supportCount}>{formatNumber(followerCount)}</Text>
+              <Text style={styles.supportLabel}>Followers</Text>
+            </Pressable>
+            <View style={styles.supportDivider} />
+            <Pressable
+              style={styles.supportBox}
+              onPress={() => {
+                setSupportersModalMode('following');
+                setSupportersModalVisible(true);
+              }}
+            >
+              <Text style={styles.supportCount}>{formatNumber(followingCount)}</Text>
+              <Text style={styles.supportLabel}>Following</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* Prominent Earnings/Rewards Button */}
         {!loading && !isAdmin && (
@@ -603,6 +800,14 @@ export default function ProfileScreen() {
             label="Settings"
             onPress={() => router.push('/settings' as any)}
           />
+          {isArtist && !isAdmin && (
+            <MenuItem
+              icon="shield-checkmark-outline"
+              label="Artist Verification"
+              sublabel={isVerifiedArtist ? 'Verified' : 'Not verified'}
+              onPress={() => router.push('/settings/verification' as any)}
+            />
+          )}
           {!isAdmin && (
             <MenuItem
               icon="card-outline"
@@ -633,6 +838,14 @@ export default function ProfileScreen() {
         {/* Version */}
         <Text style={styles.version}>Palletium v1.0.0</Text>
       </ScrollView>
+
+      <SupportersModal
+        visible={supportersModalVisible}
+        onClose={() => setSupportersModalVisible(false)}
+        artistId={user.id}
+        artistName={user.name || 'User'}
+        mode={supportersModalMode}
+      />
     </SafeAreaView>
   );
 }
@@ -780,10 +993,55 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontWeight: '500',
   },
-  // Profile Header
+  // Profile Header with Banner
+  headerWrapper: {
+    position: 'relative',
+    marginBottom: theme.spacing.sm,
+  },
+  headerBanner: {
+    height: 120,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  bannerImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  bannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  bannerCameraIcon: {
+    position: 'absolute',
+    bottom: theme.spacing.sm,
+    left: theme.spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bannerBadge: {
+    position: 'absolute',
+    top: theme.spacing.sm,
+    right: theme.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  bannerBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
   header: {
     alignItems: 'center',
-    paddingVertical: theme.spacing.lg,
+    marginTop: -50,
+    paddingBottom: theme.spacing.md,
   },
   avatarContainer: {
     position: 'relative',
@@ -799,8 +1057,8 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    borderWidth: 2,
-    borderColor: 'rgba(192,200,214,0.15)',
+    borderWidth: 3,
+    borderColor: theme.colors.background,
   },
   avatarPlaceholder: {
     justifyContent: 'center',
@@ -852,6 +1110,39 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
     fontSize: theme.fontSize.sm,
     fontWeight: '600',
+  },
+  // Supporters / Supporting
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing.md,
+    backgroundColor: 'rgba(27,31,43,0.4)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(192,200,214,0.08)',
+    overflow: 'hidden',
+  },
+  supportBox: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: theme.spacing.md,
+  },
+  supportCount: {
+    fontSize: theme.fontSize.lg,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+  },
+  supportLabel: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textMuted,
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
+  supportDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(192,200,214,0.12)',
   },
   loader: {
     marginVertical: theme.spacing.xl,

@@ -11,6 +11,7 @@ export interface User {
   stripe_subscription_status?: string | null;
   profile_image: string | null;
   profile_image_url?: string | null;
+  banner_image_url?: string | null;
   created_at: string;
   is_admin?: boolean;
   /** Artist identity verification via Stripe Identity (backend field: isVerified) */
@@ -28,11 +29,14 @@ export interface Track {
   cover_url: string | null;
   duration_seconds: number;
   play_count: number;
+  organic_play_count?: number;
   genre: string | null;
   review_status: string;
   // API may return these alternative field names
   artist_name_full?: string;
   cover_art_url?: string;
+  coverArtUrl?: string;
+  artwork_url?: string;
   duration?: number | null;
   plays?: number;
   album?: string;
@@ -43,9 +47,9 @@ export function getArtistName(track: Track): string {
   return track.artist_name_full || track.artist_name || 'Unknown Artist';
 }
 
-// Helper to get cover image URL (API uses cover_art_url)
+// Helper to get cover image URL (API uses cover_art_url or coverArtUrl depending on endpoint)
 export function getCoverUrl(track: Track): string | null {
-  return track.cover_art_url || track.cover_url || null;
+  return track.cover_art_url || track.coverArtUrl || track.cover_url || track.artwork_url || null;
 }
 
 // Helper to get duration in seconds (API uses duration which may be null)
@@ -124,13 +128,27 @@ export interface Artist {
   handle?: string;
   bio?: string;
   profile_image_url?: string;
+  slug?: string;
+  is_verified?: boolean;
   follower_count: number;
+  following_count: number;
   total_plays: number;
   level: number;
   tier?: string;
   track_count?: number;
   total_earnings?: number;
   is_following?: boolean;
+}
+
+export interface FollowUser {
+  id: number;
+  name: string;
+  profile_image?: string;
+  type: string;
+  is_verified?: boolean;
+  followed_at: string;
+  follower_count?: number;
+  track_count?: number;
 }
 
 export interface TrackInteraction {
