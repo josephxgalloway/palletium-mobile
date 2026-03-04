@@ -2,6 +2,7 @@ import { theme } from '@/constants/theme';
 import api, { getArtistTracks } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { router, useFocusEffect } from 'expo-router';
@@ -29,6 +30,9 @@ interface Track {
   is_public?: boolean;
   created_at?: string;
   cover_art_url?: string;
+  coverArtUrl?: string;
+  cover_url?: string;
+  artwork_url?: string;
 }
 
 interface StudioStats {
@@ -272,29 +276,45 @@ export default function StudioScreen() {
     </View>
   );
 
-  const renderTrackItem = ({ item }: { item: Track }) => (
-    <Pressable style={styles.trackCard} onPress={() => handleEditTrack(item)}>
-      <View style={styles.trackCover}>
-        <View style={styles.coverPlaceholder}>
-          <Ionicons name="musical-notes" size={20} color={theme.colors.textMuted} />
-        </View>
-      </View>
+  const getTrackCoverUrl = (track: Track): string | null =>
+    track.cover_art_url || track.coverArtUrl || track.cover_url || track.artwork_url || null;
 
-      <View style={styles.trackInfo}>
-        <Text style={styles.trackTitle} numberOfLines={1}>{item.title || 'Untitled'}</Text>
-        <Text style={styles.trackMeta}>
-          {item.genre || 'No genre'}{item.duration ? ` · ${formatDuration(item.duration)}` : ''} · {formatNumber(item.plays ?? item.play_count)} plays
-        </Text>
-      </View>
-
-      <View style={styles.trackActions}>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.review_status) }]}>
-          <Text style={styles.statusText}>{getStatusLabel(item)}</Text>
+  const renderTrackItem = ({ item }: { item: Track }) => {
+    const coverUrl = getTrackCoverUrl(item);
+    return (
+      <Pressable style={styles.trackCard} onPress={() => handleEditTrack(item)}>
+        <View style={styles.trackCover}>
+          {coverUrl ? (
+            <Image
+              source={{ uri: coverUrl }}
+              style={styles.trackCoverImage}
+              contentFit="cover"
+              transition={120}
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <View style={styles.coverPlaceholder}>
+              <Ionicons name="musical-notes" size={20} color={theme.colors.textMuted} />
+            </View>
+          )}
         </View>
-        <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
-      </View>
-    </Pressable>
-  );
+
+        <View style={styles.trackInfo}>
+          <Text style={styles.trackTitle} numberOfLines={1}>{item.title || 'Untitled'}</Text>
+          <Text style={styles.trackMeta}>
+            {item.genre || 'No genre'}{item.duration ? ` · ${formatDuration(item.duration)}` : ''} · {formatNumber(item.plays ?? item.play_count)} plays
+          </Text>
+        </View>
+
+        <View style={styles.trackActions}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.review_status) }]}>
+            <Text style={styles.statusText}>{getStatusLabel(item)}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+        </View>
+      </Pressable>
+    );
+  };
 
   const renderEmptyTracks = () => (
     <View style={styles.emptyTracks}>
@@ -537,6 +557,10 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 10,
     overflow: 'hidden',
+  },
+  trackCoverImage: {
+    width: '100%',
+    height: '100%',
   },
   coverPlaceholder: {
     width: 48,

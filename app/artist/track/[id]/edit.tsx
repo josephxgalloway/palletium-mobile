@@ -10,12 +10,12 @@ import {
   MetadataHistoryModal,
 } from '@/components/track-edit';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -222,7 +222,13 @@ function TrackEditScreen() {
           {/* Track Preview */}
           <View style={styles.trackPreview}>
             {coverUrl ? (
-              <Image source={{ uri: coverUrl }} style={styles.artwork} />
+              <Image
+                source={{ uri: coverUrl }}
+                style={styles.artwork}
+                contentFit="cover"
+                transition={120}
+                cachePolicy="memory-disk"
+              />
             ) : (
               <View style={[styles.artwork, styles.artworkPlaceholder]}>
                 <Ionicons name="musical-note" size={24} color={theme.colors.textMuted} />
