@@ -3,7 +3,7 @@ import { theme } from '@/constants/theme';
 import { getUserEntitlements } from '@/lib/entitlements';
 import { useAuthStore } from '@/lib/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect, Tabs } from 'expo-router';
+import { Redirect, Tabs, useSegments } from 'expo-router';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,10 +11,17 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, isLoading, user } = useAuthStore();
   const { isAdmin, isArtist } = getUserEntitlements(user);
+  const segments = useSegments();
 
   // Redirect to login if not authenticated
   if (!isLoading && !isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
+  }
+
+  // Redirect admins away from non-admin tabs to admin-dashboard
+  const currentTab = segments[1]; // e.g. "index", "admin-dashboard", "profile"
+  if (isAdmin && currentTab && !currentTab.startsWith('admin-') && currentTab !== 'profile') {
+    return <Redirect href="/(tabs)/admin-dashboard" />;
   }
 
   // Calculate proper bottom padding for iPhone notch/home indicator
