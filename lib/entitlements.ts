@@ -78,7 +78,8 @@ export function getUserEntitlements(user: User | null | undefined): UserEntitlem
   // Listener rewards require listener subscription + email verification.
   // Pure artists (no listener subscription) are not in the rewards funnel.
   // Hybrid accounts (artist + active listener subscription) ARE eligible.
-  const canEarnListenerRewards = !isArtist || hasActiveListenerSubscription;
+  // Admins are exempt — they don't participate in the rewards funnel.
+  const canEarnListenerRewards = !isAdmin && (!isArtist || hasActiveListenerSubscription);
 
   return {
     isAdmin,
