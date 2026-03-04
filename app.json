@@ -38,7 +38,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#161922"
+        "backgroundColor": "#000000"
       },
       "package": "com.palletium.app",
       "versionCode": 1,
@@ -57,7 +57,36 @@
       "expo-router",
       "expo-secure-store",
       "expo-web-browser",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-alternate-app-icons",
+        [
+          {
+            "name": "Silver",
+            "ios": "./assets/icons/silver.png",
+            "android": {
+              "foregroundImage": "./assets/icons/silver.png",
+              "backgroundColor": "#2d2d3d"
+            }
+          },
+          {
+            "name": "Midnight",
+            "ios": "./assets/icons/midnight.png",
+            "android": {
+              "foregroundImage": "./assets/icons/midnight.png",
+              "backgroundColor": "#1a1a2e"
+            }
+          },
+          {
+            "name": "Inverted",
+            "ios": "./assets/icons/inverted.png",
+            "android": {
+              "foregroundImage": "./assets/icons/inverted.png",
+              "backgroundColor": "#f0f0f0"
+            }
+          }
+        ]
+      ]
     ],
     "experiments": {
       "typedRoutes": true
