@@ -127,8 +127,11 @@ export default function RootLayout() {
       // Load preview count for free users
       await loadPreviewCount();
 
-      // Initialize gamification stats (for XP tracking)
-      await fetchStats();
+      // Initialize gamification stats only for authenticated users.
+      // Prevents 401 -> refresh flow noise on cold start before login.
+      if (isAuth) {
+        await fetchStats();
+      }
 
       // Initialize player
       const ready = await setupPlayer();

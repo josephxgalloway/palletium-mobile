@@ -29,7 +29,6 @@ import {
   createUploadTask,
   FileSystemUploadType,
 } from 'expo-file-system/legacy';
-import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
 import api from '../api/client';
@@ -99,6 +98,9 @@ const NON_RETRYABLE_TRACK_STATUS = new Set([400, 403, 409, 422]);
 // ── Concurrency guard ────────────────────────────────────────────────────────
 
 let uploadInFlight = false;
+
+let cryptoModule: any = null;
+let cryptoUnavailableLogged = false;
 
 // ── Dev logging ──────────────────────────────────────────────────────────────
 
@@ -192,11 +194,37 @@ async function stableIdempotencyKey(
   byteSize: number,
 ): Promise<string> {
   const input = `${userId}:${filename}:${byteSize}:TRACK_AUDIO`;
-  const hash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    input,
-  );
-  return `mobile:${hash}`;
+  try {
+    if (!cryptoModule) {
+      cryptoModule = require('expo-crypto');
+    }
+    const hash = await cryptoModule.digestStringAsync(
+      cryptoModule.CryptoDigestAlgorithm.SHA256,
+      input,
+    );
+    return `mobile:${hash}`;
+  } catch {
+    // Expo Go / stale dev client can miss ExpoCrypto. Use deterministic JS hash
+    // so route evaluation does not fail and idempotency remains stable.
+    if (!cryptoUnavailableLogged) {
+      cryptoUnavailableLogged = true;
+      console.warn(
+        '[DIRECT_UPLOAD] expo-crypto unavailable; using JS fallback hash for idempotency key',
+      );
+    }
+    return `mobile:fallback:${fallbackHash(input)}`;
+  }
+}
+
+function fallbackHash(input: string): string {
+  let h1 = 5381;
+  let h2 = 0;
+  for (let i = 0; i < input.length; i++) {
+    const c = input.charCodeAt(i);
+    h1 = ((h1 << 5) + h1 + c) >>> 0; // djb2
+    h2 = (c + (h2 << 6) + (h2 << 16) - h2) >>> 0; // sdbm
+  }
+  return `${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`;
 }
 
 /**

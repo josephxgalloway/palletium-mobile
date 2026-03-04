@@ -10,7 +10,11 @@ try {
   console.warn('[WebSocket] socket.io-client not installed - artist notifications disabled');
 }
 
-const WS_URL = 'https://palletium.com';
+const API_ORIGIN = (process.env.EXPO_PUBLIC_API_URL || 'https://api.palletium.com')
+  .replace(/\/+$/, '');
+const WS_URL = API_ORIGIN.endsWith('/api')
+  ? API_ORIGIN.slice(0, -4)
+  : API_ORIGIN;
 
 export interface ArtistPlayNotification {
   type: 'NEW_PLAY';
