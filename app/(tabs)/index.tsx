@@ -268,7 +268,7 @@ export default function DiscoverScreen() {
       >
         <View style={styles.coverContainer}>
           {coverUrl ? (
-            <Image source={{ uri: coverUrl }} style={styles.cover} transition={200} />
+            <Image source={{ uri: coverUrl }} style={styles.cover} contentFit="cover" transition={200} />
           ) : (
             <View style={[styles.cover, styles.coverPlaceholder]}>
               <Ionicons name="musical-note" size={24} color={theme.colors.textMuted} />
@@ -597,7 +597,7 @@ export default function DiscoverScreen() {
                       >
                         <Text style={styles.radioTrackIndex}>{index + 1}</Text>
                         {coverUrl ? (
-                          <Image source={{ uri: coverUrl }} style={styles.radioTrackCover} transition={200} />
+                          <Image source={{ uri: coverUrl }} style={styles.radioTrackCover} contentFit="cover" transition={200} />
                         ) : (
                           <View style={[styles.radioTrackCover, styles.coverPlaceholder]}>
                             <Ionicons name="musical-note" size={16} color={theme.colors.textMuted} />

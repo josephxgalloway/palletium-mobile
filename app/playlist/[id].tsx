@@ -289,7 +289,7 @@ export default function PlaylistDetailScreen() {
         const coverUrl = getPlaylistCoverUrl();
         if (coverUrl) {
             return (
-                <Image source={{ uri: coverUrl }} style={styles.playlistCover} />
+                <Image source={{ uri: coverUrl }} style={styles.playlistCover} contentFit="cover" />
             );
         }
 
@@ -312,7 +312,7 @@ export default function PlaylistDetailScreen() {
 
         if (covers.length < 4) {
             return (
-                <Image source={{ uri: covers[0] as string }} style={styles.playlistCover} />
+                <Image source={{ uri: covers[0] as string }} style={styles.playlistCover} contentFit="cover" />
             );
         }
 
@@ -368,7 +368,7 @@ export default function PlaylistDetailScreen() {
                 )}
 
                 {coverUrl ? (
-                    <Image source={{ uri: coverUrl }} style={styles.trackCover} />
+                    <Image source={{ uri: coverUrl }} style={styles.trackCover} contentFit="cover" />
                 ) : (
                     <View style={[styles.trackCover, styles.trackCoverPlaceholder]}>
                         <Ionicons name="musical-note" size={18} color={theme.colors.textMuted} />
@@ -602,9 +602,9 @@ export default function PlaylistDetailScreen() {
                             <Text style={styles.inputLabel}>Cover Image</Text>
                             <TouchableOpacity style={styles.coverPicker} onPress={pickCoverImage} activeOpacity={0.7}>
                                 {editCoverUri ? (
-                                    <Image source={{ uri: editCoverUri }} style={styles.coverPickerImage} />
+                                    <Image source={{ uri: editCoverUri }} style={styles.coverPickerImage} contentFit="cover" />
                                 ) : getPlaylistCoverUrl() ? (
-                                    <Image source={{ uri: getPlaylistCoverUrl()! }} style={styles.coverPickerImage} />
+                                    <Image source={{ uri: getPlaylistCoverUrl()! }} style={styles.coverPickerImage} contentFit="cover" />
                                 ) : (
                                     <View style={styles.coverPickerPlaceholder}>
                                         <Ionicons name="image-outline" size={32} color={theme.colors.textMuted} />

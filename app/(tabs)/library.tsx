@@ -183,7 +183,7 @@ export default function LibraryScreen() {
     if (!renamePlaylistTarget || !renamePlaylistName.trim()) return;
     setRenamingPlaylist(true);
     try {
-      await api.put(`/playlists/${renamePlaylistTarget.id}`, { name: renamePlaylistName.trim() });
+      await api.patch(`/playlists/${renamePlaylistTarget.id}`, { name: renamePlaylistName.trim() });
       Toast.show({ type: 'success', text1: 'Playlist renamed' });
       setShowRenamePlaylist(false);
       setRenamePlaylistTarget(null);
