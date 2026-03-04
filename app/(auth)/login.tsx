@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as SecureStore from 'expo-secure-store';
+import Toast from 'react-native-toast-message';
 import { useAuthStore } from '@/lib/store/authStore';
 import { getUserEntitlements } from '@/lib/entitlements';
+import { consumeAutoLoggedOut } from '@/lib/inactivity';
 import api from '@/lib/api/client';
 import { theme } from '@/constants/theme';
 
@@ -40,6 +42,17 @@ export default function LoginScreen() {
     clearError,
     requires2FA
   } = useAuthStore();
+
+  // Show toast if user was auto-logged out due to inactivity
+  useEffect(() => {
+    if (consumeAutoLoggedOut()) {
+      Toast.show({
+        type: 'info',
+        text1: 'Session Expired',
+        text2: 'You were logged out due to inactivity.',
+      });
+    }
+  }, []);
 
   const getPostLoginRoute = () => {
     const user = useAuthStore.getState().user;

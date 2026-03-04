@@ -15,9 +15,17 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState, ReactNode } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { useEffect, useRef, useState, useCallback, ReactNode } from 'react';
+import { AppState, AppStateStatus, PanResponder } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { router as expoRouter } from 'expo-router';
+import {
+  resetInactivityTimer,
+  isInactive,
+  initInactivityTimer,
+  flushToSecureStore,
+  setAutoLoggedOut,
+} from '@/lib/inactivity';
 import Toast from 'react-native-toast-message';
 
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
@@ -65,13 +73,34 @@ const PalletiumTheme = {
 };
 
 export default function RootLayout() {
-  const { checkAuth, isLoading, isAuthenticated } = useAuthStore();
+  const { checkAuth, logout, isLoading, isAuthenticated } = useAuthStore();
   const { initialize: initNetwork } = useNetworkStore();
   const { loadPreviewCount } = usePlayerStore();
   const { fetchStats } = useGamificationStore();
   const [playerReady, setPlayerReady] = useState(false);
   const [showAnimatedSplash, setShowAnimatedSplash] = useState(true);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const inactivityIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isLoggingOutRef = useRef(false);
+
+  // PanResponder captures all touch starts for inactivity tracking.
+  // Returns false so child gesture handlers work normally.
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => {
+        resetInactivityTimer();
+        return false;
+      },
+    })
+  ).current;
+
+  const handleInactivityLogout = useCallback(async () => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
+    setAutoLoggedOut();
+    await logout();
+    expoRouter.replace('/(auth)/login' as any);
+  }, [logout]);
 
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -81,6 +110,19 @@ export default function RootLayout() {
     async function init() {
       // Initialize auth
       await checkAuth();
+
+      // Cold-start inactivity check: if app was killed and reopened after 15+ min, log out
+      const isAuth = useAuthStore.getState().isAuthenticated;
+      if (isAuth) {
+        const stale = await initInactivityTimer();
+        if (stale) {
+          setAutoLoggedOut();
+          await logout();
+          return; // Skip rest of init — user will land on login
+        }
+        // Fresh login/hydration — reset timer to prevent stale SecureStore causing immediate expiry
+        resetInactivityTimer();
+      }
 
       // Load preview count for free users
       await loadPreviewCount();
@@ -99,18 +141,55 @@ export default function RootLayout() {
     return () => unsubscribe();
   }, []);
 
-  // Refresh user profile when app returns to foreground (e.g., after email verification in browser)
+  // AppState: inactivity check on foreground, flush timestamp on background
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+      const wasBg = appStateRef.current.match(/inactive|background/);
+
+      if (wasBg && nextState === 'active') {
+        // Returning to foreground — check inactivity before refreshing auth
         if (isAuthenticated) {
-          checkAuth();
+          if (isInactive()) {
+            handleInactivityLogout();
+          } else {
+            checkAuth();
+          }
+        }
+      } else if (!wasBg && nextState.match(/inactive|background/)) {
+        // Going to background — flush inactivity timestamp to SecureStore
+        if (isAuthenticated) {
+          flushToSecureStore(); // Best-effort, awaited internally
         }
       }
+
       appStateRef.current = nextState;
     });
     return () => subscription.remove();
-  }, [isAuthenticated, checkAuth]);
+  }, [isAuthenticated, checkAuth, handleInactivityLogout]);
+
+  // Foreground inactivity check interval (catches "screen on, no touch" scenarios)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      if (inactivityIntervalRef.current) {
+        clearInterval(inactivityIntervalRef.current);
+        inactivityIntervalRef.current = null;
+      }
+      isLoggingOutRef.current = false;
+      return;
+    }
+    resetInactivityTimer(); // Reset on auth change (fresh login)
+    inactivityIntervalRef.current = setInterval(() => {
+      if (isInactive() && useAuthStore.getState().isAuthenticated) {
+        handleInactivityLogout();
+      }
+    }, 60_000);
+    return () => {
+      if (inactivityIntervalRef.current) {
+        clearInterval(inactivityIntervalRef.current);
+        inactivityIntervalRef.current = null;
+      }
+    };
+  }, [isAuthenticated, handleInactivityLogout]);
 
   useEffect(() => {
     if (loaded && !isLoading) {
@@ -123,7 +202,10 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <GestureHandlerRootView
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
+      {...panResponder.panHandlers}
+    >
       {showAnimatedSplash && (
         <AnimatedSplash onFinish={() => setShowAnimatedSplash(false)} />
       )}
