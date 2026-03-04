@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
+    Image,
     KeyboardAvoidingView,
     Modal,
     Platform,
@@ -275,10 +276,11 @@ export default function CommunityScreen() {
     const renderPost = ({ item }: { item: Post }) => (
         <View style={styles.postCard}>
             <View style={styles.postHeader}>
-                <View style={styles.avatarContainer}>
-                    <Text style={styles.avatarText}>
-                        {item.user_name.charAt(0).toUpperCase()}
-                    </Text>
+                <View style={[styles.avatarContainer, { backgroundColor: '#000' }]}>
+                    <Image
+                        source={require('../../assets/images/icon.png')}
+                        style={{ width: 26, height: 26, borderRadius: 13 }}
+                    />
                 </View>
                 <View style={styles.headerInfo}>
                     <Text style={styles.userName}>{item.user_name}</Text>

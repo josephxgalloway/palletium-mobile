@@ -79,11 +79,10 @@ export default function SupportersModal({
       {item.profile_image ? (
         <Image source={{ uri: item.profile_image }} style={styles.avatar} />
       ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Ionicons
-            name={item.type === 'artist' ? 'person' : 'person-outline'}
-            size={20}
-            color={theme.colors.textMuted}
+        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: '#000' }]}>
+          <Image
+            source={require('../assets/images/icon.png')}
+            style={{ width: 28, height: 28, borderRadius: 14 }}
           />
         </View>
       )}

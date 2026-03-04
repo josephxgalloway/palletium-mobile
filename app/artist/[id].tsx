@@ -195,10 +195,11 @@ export default function ArtistDetailScreen() {
                                 style={styles.profileImage}
                             />
                         ) : (
-                            <View style={[styles.profileImage, styles.profileImagePlaceholder]}>
-                                <Text style={styles.profileImageText}>
-                                    {artist.name.charAt(0).toUpperCase()}
-                                </Text>
+                            <View style={[styles.profileImage, styles.profileImagePlaceholder, { backgroundColor: '#000' }]}>
+                                <Image
+                                    source={require('../../assets/images/icon.png')}
+                                    style={{ width: 48, height: 48, borderRadius: 24 }}
+                                />
                             </View>
                         )}
 

@@ -142,10 +142,11 @@ function NotificationCard({ notification, index, onDismiss }: NotificationCardPr
             style={styles.avatar}
           />
         ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>
-              {listenerName.charAt(0).toUpperCase()}
-            </Text>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: '#000' }]}>
+            <Image
+              source={require('../../assets/images/icon.png')}
+              style={{ width: 24, height: 24, borderRadius: 12 }}
+            />
           </View>
         )}
 

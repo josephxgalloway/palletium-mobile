@@ -189,6 +189,17 @@ export default function SettingsScreen() {
                     </SettingSection>
                 )}
 
+                {/* Appearance */}
+                <SettingSection title="Appearance" icon="color-palette-outline">
+                    <SettingRow
+                        icon="apps-outline"
+                        label="App Icon"
+                        value="Default"
+                        iconColor="#8B5CF6"
+                        onPress={() => router.push('/settings/app-icon' as any)}
+                    />
+                </SettingSection>
+
                 {/* Storage */}
                 <SettingSection title="Storage" icon="folder-outline">
                     <SettingRow

@@ -288,11 +288,6 @@ export default function DiscoverScreen() {
         <View style={styles.trackInfo}>
           <Text style={styles.trackTitle} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.trackArtist} numberOfLines={1}>{artistName}</Text>
-          <View style={styles.trackMeta}>
-            <Text style={styles.duration}>{formatDuration(duration)}</Text>
-            <View style={styles.metaDot} />
-            <Text style={styles.plays}>{(item.plays ?? item.play_count ?? 0).toLocaleString()} plays</Text>
-          </View>
         </View>
 
         <Pressable style={styles.moreButton} onPress={() => navigateToTrack(item)}>
@@ -457,15 +452,17 @@ export default function DiscoverScreen() {
                           transition={200}
                         />
                       ) : (
-                        <View style={[styles.artistAvatar, styles.artistAvatarPlaceholder]}>
-                          <Ionicons name="person" size={24} color={theme.colors.textMuted} />
+                        <View style={[styles.artistAvatar, styles.artistAvatarPlaceholder, { backgroundColor: '#000' }]}>
+                          <Image
+                            source={require('../../assets/images/icon.png')}
+                            style={{ width: 32, height: 32, borderRadius: 16 }}
+                          />
                         </View>
                       )}
                       <View style={styles.artistInfo}>
                         <Text style={styles.artistCardName} numberOfLines={1}>{artist.name}</Text>
                         <Text style={styles.artistCardMeta} numberOfLines={1}>
                           {artist.track_count ?? 0} tracks
-                          {artist.total_plays ? ` · ${artist.total_plays.toLocaleString()} plays` : ''}
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />

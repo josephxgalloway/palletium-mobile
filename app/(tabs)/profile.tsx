@@ -492,14 +492,14 @@ export default function ProfileScreen() {
                 {user.profile_image ? (
                   <Image source={{ uri: user.profile_image }} style={styles.avatar} transition={300} />
                 ) : (
-                  <LinearGradient
-                    colors={['rgba(108,134,168,0.3)', 'rgba(192,200,214,0.2)']}
-                    style={[styles.avatar, styles.avatarPlaceholder]}
+                  <View
+                    style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: '#000' }]}
                   >
-                    <Text style={styles.avatarText}>
-                      {user.name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
-                    </Text>
-                  </LinearGradient>
+                    <Image
+                      source={require('../../assets/images/icon.png')}
+                      style={{ width: 60, height: 60, borderRadius: 30 }}
+                    />
+                  </View>
                 )}
               </View>
               {/* Camera icon overlay */}
