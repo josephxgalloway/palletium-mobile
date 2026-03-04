@@ -7,7 +7,7 @@ import {
 import type { FraudReport, ContentModeration } from '@/lib/api/admin.service';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -60,8 +60,8 @@ function AdminTrustTab() {
     setRefreshing(false);
   }, []);
 
-  const openWebAdmin = (path: string) => {
-    Linking.openURL(`https://palletium.com/admin/${path}`);
+  const navigateAdmin = (path: string) => {
+    router.push(`/admin/${path}` as any);
   };
 
   if (loading) {
@@ -200,18 +200,18 @@ function AdminTrustTab() {
           </>
         )}
 
-        {/* Quick Links */}
+        {/* Detailed Views */}
         <Text style={styles.sectionTitle}>Detailed Views</Text>
         <View style={styles.linkCards}>
-          <TouchableOpacity style={styles.linkCard} onPress={() => openWebAdmin('trust-safety')}>
+          <TouchableOpacity style={styles.linkCard} onPress={() => navigateAdmin('fraud')}>
             <Ionicons name="shield-checkmark" size={22} color={theme.colors.primary} />
-            <Text style={styles.linkCardText}>Full Trust & Safety Dashboard</Text>
-            <Ionicons name="open-outline" size={16} color={theme.colors.textMuted} />
+            <Text style={styles.linkCardText}>Fraud Detection</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.linkCard} onPress={() => openWebAdmin('ai-monitoring')}>
+          <TouchableOpacity style={styles.linkCard} onPress={() => navigateAdmin('audio-analysis')}>
             <Ionicons name="scan" size={22} color={theme.colors.primary} />
-            <Text style={styles.linkCardText}>AI Content Monitoring</Text>
-            <Ionicons name="open-outline" size={16} color={theme.colors.textMuted} />
+            <Text style={styles.linkCardText}>AI Content Review</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
           </TouchableOpacity>
         </View>
       </ScrollView>

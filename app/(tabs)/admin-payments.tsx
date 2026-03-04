@@ -3,11 +3,12 @@ import { theme } from '@/constants/theme';
 import {
   getFinancialMetrics,
   getProofMetrics,
+  getStripeBalance,
+  getLedgerReconciliation,
 } from '@/lib/api/admin.service';
-import type { FinancialMetrics, ProofMetrics } from '@/lib/api/admin.service';
+import type { FinancialMetrics, ProofMetrics, StripeBalance, LedgerReconciliation } from '@/lib/api/admin.service';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Linking from 'expo-linking';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -29,24 +30,46 @@ export default function AdminPaymentsPage() {
   );
 }
 
+type ReconciliationWindow = 'lifetime' | '30d' | '7d';
+
 function AdminPaymentsTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [financial, setFinancial] = useState<FinancialMetrics | null>(null);
   const [proof, setProof] = useState<ProofMetrics | null>(null);
+  const [stripeBalance, setStripeBalance] = useState<StripeBalance | null>(null);
+  const [reconciliation, setReconciliation] = useState<LedgerReconciliation | null>(null);
+  const [reconWindow, setReconWindow] = useState<ReconciliationWindow>('lifetime');
 
   useEffect(() => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    loadReconciliation();
+  }, [reconWindow]);
+
+  const loadReconciliation = async () => {
+    try {
+      const res = await getLedgerReconciliation(reconWindow).catch(() => null);
+      if (res) setReconciliation(res);
+    } catch {
+      // silent
+    }
+  };
+
   const loadData = async () => {
     try {
-      const [financialRes, proofRes] = await Promise.all([
+      const [financialRes, proofRes, stripeRes, reconRes] = await Promise.all([
         getFinancialMetrics().catch(() => null),
         getProofMetrics().catch(() => null),
+        getStripeBalance().catch(() => null),
+        getLedgerReconciliation('lifetime').catch(() => null),
       ]);
       if (financialRes) setFinancial(financialRes);
       if (proofRes) setProof(proofRes);
+      if (stripeRes) setStripeBalance(stripeRes);
+      if (reconRes) setReconciliation(reconRes);
     } catch (error) {
       console.error('Failed to load payments data:', error);
     } finally {
@@ -113,6 +136,96 @@ function AdminPaymentsTab() {
             </View>
           </View>
         </LinearGradient>
+
+        {/* Stripe Balance (Live) */}
+        {stripeBalance?.connected && (
+          <>
+            <Text style={styles.sectionTitle}>Stripe Balance (Live)</Text>
+            <LinearGradient colors={['#1E3A5F', '#0D1F33']} style={styles.stripeCard}>
+              <View style={styles.stripeHeader}>
+                <Ionicons name="card" size={20} color="#60A5FA" />
+                <Text style={styles.stripeHeaderText}>
+                  {stripeBalance.mode === 'live' ? 'LIVE' : 'TEST'}
+                </Text>
+              </View>
+              <View style={styles.revenueStats}>
+                <View style={styles.revenueStatItem}>
+                  <Text style={[styles.revenueStatValue, { color: '#10B981' }]}>
+                    ${fmt(stripeBalance.availableBalance?.[0]?.amount ?? 0)}
+                  </Text>
+                  <Text style={styles.revenueStatLabel}>Available</Text>
+                </View>
+                <View style={styles.revenueStatItem}>
+                  <Text style={[styles.revenueStatValue, { color: '#F59E0B' }]}>
+                    ${fmt(stripeBalance.pendingBalance?.[0]?.amount ?? 0)}
+                  </Text>
+                  <Text style={styles.revenueStatLabel}>Pending</Text>
+                </View>
+                <View style={styles.revenueStatItem}>
+                  <Text style={styles.revenueStatValue}>
+                    ${fmt(
+                      (stripeBalance.availableBalance?.[0]?.amount ?? 0) +
+                      (stripeBalance.pendingBalance?.[0]?.amount ?? 0)
+                    )}
+                  </Text>
+                  <Text style={styles.revenueStatLabel}>Total</Text>
+                </View>
+              </View>
+            </LinearGradient>
+          </>
+        )}
+
+        {/* Ledger Reconciliation */}
+        <Text style={styles.sectionTitle}>Ledger Reconciliation</Text>
+        <View style={styles.windowTabs}>
+          {(['7d', '30d', 'lifetime'] as ReconciliationWindow[]).map(w => (
+            <TouchableOpacity
+              key={w}
+              style={[styles.windowTab, reconWindow === w && styles.windowTabActive]}
+              onPress={() => setReconWindow(w)}
+            >
+              <Text style={[styles.windowTabText, reconWindow === w && styles.windowTabTextActive]}>
+                {w === 'lifetime' ? 'All Time' : w.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {reconciliation ? (
+          <View style={styles.reconCard}>
+            <View style={[styles.solvencyBanner, {
+              backgroundColor: reconciliation.solvent_total ? '#10B98120' : '#F8717120',
+            }]}>
+              <Ionicons
+                name={reconciliation.solvent_total ? 'checkmark-circle' : 'warning'}
+                size={18}
+                color={reconciliation.solvent_total ? '#10B981' : '#F87171'}
+              />
+              <Text style={[styles.solvencyText, {
+                color: reconciliation.solvent_total ? '#10B981' : '#F87171',
+              }]}>
+                {reconciliation.solvent_total ? 'SOLVENT' : 'UNDER-RESERVED'}
+              </Text>
+            </View>
+            <View style={styles.costDivider} />
+            <ReconRow label="Settled Total" value={fmtCents(reconciliation.settled_total_cents)} color="#10B981" />
+            <View style={styles.costDivider} />
+            <ReconRow label="Reserve Balance" value={fmtCents(reconciliation.reserve_balance_cents)} color="#60A5FA" />
+            <View style={styles.costDivider} />
+            <ReconRow label="Artist Paid" value={fmtCents(reconciliation.artist_paid_cents)} />
+            <View style={styles.costDivider} />
+            <ReconRow label="Artist Outstanding" value={fmtCents(reconciliation.artist_outstanding_liability_cents)} color="#F59E0B" />
+            <View style={styles.costDivider} />
+            <ReconRow label="Listener Accrued" value={fmtCents(reconciliation.listener_accrued_cents)} />
+            <View style={styles.costDivider} />
+            <ReconRow label="Listener Paid" value={fmtCents(reconciliation.listener_paid_cents)} />
+            <View style={styles.costDivider} />
+            <ReconRow label="Listener Outstanding" value={fmtCents(reconciliation.listener_outstanding_liability_cents)} color="#F59E0B" />
+          </View>
+        ) : (
+          <View style={styles.reconCard}>
+            <Text style={styles.reconEmpty}>No reconciliation data available</Text>
+          </View>
+        )}
 
         {/* Costs Breakdown */}
         <Text style={styles.sectionTitle}>Costs Breakdown</Text>
@@ -194,15 +307,7 @@ function AdminPaymentsTab() {
           <TierRow label="AI / Unverified Tier" rate="$0.004" color="#F59E0B" />
         </View>
 
-        {/* Web Link */}
-        <TouchableOpacity
-          style={styles.webLink}
-          onPress={() => Linking.openURL('https://palletium.com/admin/payments')}
-        >
-          <Ionicons name="globe-outline" size={20} color={theme.colors.primary} />
-          <Text style={styles.webLinkText}>Open Financial Dashboard</Text>
-          <Ionicons name="open-outline" size={16} color={theme.colors.textMuted} />
-        </TouchableOpacity>
+        {/* Detailed analytics link removed — all data is displayed above */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -227,6 +332,15 @@ function ProofCard({ icon, label, value, color, isCurrency }: {
   );
 }
 
+function ReconRow({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <View style={styles.reconRow}>
+      <Text style={styles.reconLabel}>{label}</Text>
+      <Text style={[styles.reconValue, color ? { color } : null]}>${value}</Text>
+    </View>
+  );
+}
+
 function TierRow({ label, rate, color }: { label: string; rate: string; color: string }) {
   return (
     <View style={styles.tierRow}>
@@ -239,6 +353,10 @@ function TierRow({ label, rate, color }: { label: string; rate: string; color: s
 
 function fmt(num: number): string {
   return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtCents(cents: number): string {
+  return (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 const styles = StyleSheet.create({
@@ -411,20 +529,83 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.lg,
     fontWeight: 'bold',
   },
-  webLink: {
+  stripeCard: {
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+  },
+  stripeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  stripeHeaderText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#60A5FA',
+    letterSpacing: 1,
+  },
+  windowTabs: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: 4,
+    marginBottom: theme.spacing.sm,
+  },
+  windowTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: theme.borderRadius.sm,
+  },
+  windowTabActive: {
+    backgroundColor: theme.colors.primary + '20',
+  },
+  windowTabText: {
+    fontSize: 13,
+    color: theme.colors.textMuted,
+    fontWeight: '600',
+  },
+  windowTabTextActive: {
+    color: theme.colors.primary,
+  },
+  reconCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+  },
+  solvencyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    marginTop: theme.spacing.xl,
-    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.sm,
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
   },
-  webLinkText: {
-    flex: 1,
+  solvencyText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  reconRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+  },
+  reconLabel: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  reconValue: {
     fontSize: theme.fontSize.md,
-    color: theme.colors.primary,
     fontWeight: '600',
+    color: theme.colors.textPrimary,
+  },
+  reconEmpty: {
+    textAlign: 'center',
+    color: theme.colors.textMuted,
+    paddingVertical: theme.spacing.md,
   },
 });

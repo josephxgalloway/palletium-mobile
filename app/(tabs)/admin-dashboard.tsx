@@ -4,7 +4,7 @@ import { getAnalytics, getSystemHealth, getReviewMetrics } from '@/lib/api/admin
 import type { AdminAnalytics, SystemHealth, ReviewMetrics } from '@/lib/api/admin.service';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -60,8 +60,8 @@ function AdminDashboardTab() {
     setRefreshing(false);
   }, []);
 
-  const openWebAdmin = (path: string) => {
-    Linking.openURL(`https://palletium.com/admin/${path}`);
+  const navigateAdmin = (path: string) => {
+    router.push(`/admin/${path}` as any);
   };
 
   if (loading) {
@@ -179,23 +179,13 @@ function AdminDashboardTab() {
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActions}>
-          <QuickActionButton icon="shield-checkmark" label="Moderation" onPress={() => openWebAdmin('trust-safety')} />
-          <QuickActionButton icon="warning" label="Fraud" onPress={() => openWebAdmin('trust-safety')} />
-          <QuickActionButton icon="analytics" label="Analytics" onPress={() => openWebAdmin('analytics')} />
-          <QuickActionButton icon="people" label="Users" onPress={() => openWebAdmin('users')} />
-          <QuickActionButton icon="musical-note" label="Audio Analysis" onPress={() => openWebAdmin('audio-analysis')} />
-          <QuickActionButton icon="server" label="System Health" onPress={() => openWebAdmin('system-health')} />
+          <QuickActionButton icon="shield-checkmark" label="Moderation" onPress={() => navigateAdmin('moderation')} />
+          <QuickActionButton icon="warning" label="Fraud" onPress={() => navigateAdmin('fraud')} />
+          <QuickActionButton icon="analytics" label="Analytics" onPress={() => navigateAdmin('analytics')} />
+          <QuickActionButton icon="people" label="Users" onPress={() => navigateAdmin('users')} />
+          <QuickActionButton icon="musical-note" label="Audio Analysis" onPress={() => navigateAdmin('audio-analysis')} />
+          <QuickActionButton icon="server" label="System Health" onPress={() => navigateAdmin('system-health')} />
         </View>
-
-        {/* Open Web Dashboard */}
-        <TouchableOpacity
-          style={styles.webDashboardButton}
-          onPress={() => Linking.openURL('https://palletium.com/admin')}
-        >
-          <Ionicons name="globe-outline" size={20} color={theme.colors.primary} />
-          <Text style={styles.webDashboardText}>Open Full Admin Dashboard</Text>
-          <Ionicons name="open-outline" size={16} color={theme.colors.textMuted} />
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -425,21 +415,5 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.textSecondary,
     textAlign: 'center',
-  },
-  webDashboardButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
-    marginTop: theme.spacing.xl,
-    gap: theme.spacing.sm,
-  },
-  webDashboardText: {
-    flex: 1,
-    fontSize: theme.fontSize.md,
-    color: theme.colors.primary,
-    fontWeight: '600',
   },
 });
