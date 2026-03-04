@@ -43,6 +43,16 @@ const FAQ_ITEMS = [
     { q: 'Why is my track pending review?', a: 'All new uploads go through a review process before appearing on Discover. This usually takes 24-48 hours. You\'ll be notified when your track is approved.' },
 ];
 
+const CATEGORY_TO_API: Record<Category, 'BUG' | 'FEATURE_REQUEST' | 'ACCOUNT' | 'PAYMENTS' | 'OTHER'> = {
+    bug: 'BUG',
+    feature: 'FEATURE_REQUEST',
+    account: 'ACCOUNT',
+    payment: 'PAYMENTS',
+    general: 'OTHER',
+};
+
+const WEB_APP_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://palletium.com').replace(/\/+$/, '');
+
 export default function SupportScreen() {
     const { user } = useAuthStore();
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -51,6 +61,13 @@ export default function SupportScreen() {
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+    const [createdTicket, setCreatedTicket] = useState<{ id: string; ticketNumber: string } | null>(null);
+
+    const openEmailFallback = async (category: Category, ticketSubject: string, ticketMessage: string) => {
+        await Linking.openURL(
+            `mailto:support@palletium.com?subject=${encodeURIComponent(`[${category}] ${ticketSubject}`)}&body=${encodeURIComponent(ticketMessage)}`
+        );
+    };
 
     const handleSubmit = async () => {
         if (!selectedCategory || !subject.trim() || !message.trim()) {
@@ -62,36 +79,41 @@ export default function SupportScreen() {
             return;
         }
 
+        if (!user) {
+            await openEmailFallback(selectedCategory, subject.trim(), message.trim());
+            setSubmitted(true);
+            return;
+        }
+
         setSubmitting(true);
         try {
-            await api.post('/support/feedback', {
-                category: selectedCategory,
+            const response = await api.post('/support/tickets', {
+                category: CATEGORY_TO_API[selectedCategory],
                 subject: subject.trim(),
-                message: message.trim(),
+                description: message.trim(),
                 source: 'mobile',
             });
+
+            const ticket = response.data?.ticket || response.data;
+            const ticketId = String(ticket?.id || '');
+            const ticketNumber = String(ticket?.ticketNumber || ticket?.ticket_number || ticketId || 'Pending');
+            setCreatedTicket({ id: ticketId, ticketNumber });
 
             setSubmitted(true);
             Toast.show({
                 type: 'success',
-                text1: 'Submitted successfully',
-                text2: 'We\'ll get back to you soon',
+                text1: 'Ticket created',
+                text2: `Ticket #${ticketNumber}`,
             });
         } catch (error: any) {
-            // If the endpoint doesn't exist, fall back to email
-            const errorStatus = error.response?.status;
-            if (errorStatus === 404) {
-                Linking.openURL(
-                    `mailto:support@palletium.com?subject=${encodeURIComponent(`[${selectedCategory}] ${subject.trim()}`)}&body=${encodeURIComponent(message.trim())}`
-                );
-                setSubmitted(true);
-            } else {
-                Toast.show({
-                    type: 'error',
-                    text1: 'Failed to submit',
-                    text2: 'Please try emailing support@palletium.com',
-                });
-            }
+            // Hard failure fallback
+            await openEmailFallback(selectedCategory, subject.trim(), message.trim());
+            setSubmitted(true);
+            Toast.show({
+                type: 'error',
+                text1: 'Using email fallback',
+                text2: 'Opened support@palletium.com',
+            });
         } finally {
             setSubmitting(false);
         }
@@ -102,6 +124,7 @@ export default function SupportScreen() {
         setSubject('');
         setMessage('');
         setSubmitted(false);
+        setCreatedTicket(null);
     };
 
     return (
@@ -132,8 +155,23 @@ export default function SupportScreen() {
                         </View>
                         <Text style={styles.successTitle}>Message Sent</Text>
                         <Text style={styles.successSubtitle}>
-                            We've received your message and will respond within 24-48 hours.
+                            We've created a support ticket for your request. You can track ticket status on web.
                         </Text>
+                        {createdTicket && (
+                            <View style={styles.ticketCard}>
+                                <Text style={styles.ticketLabel}>Ticket Number</Text>
+                                <Text style={styles.ticketNumber}>#{createdTicket.ticketNumber}</Text>
+                            </View>
+                        )}
+                        {createdTicket?.id && (
+                            <TouchableOpacity
+                                style={styles.statusButton}
+                                onPress={() => Linking.openURL(`${WEB_APP_URL}/support/${createdTicket.id}`)}
+                            >
+                                <Ionicons name="open-outline" size={16} color={theme.colors.primary} />
+                                <Text style={styles.statusButtonText}>View Ticket Status on Web</Text>
+                            </TouchableOpacity>
+                        )}
                         <TouchableOpacity style={styles.newTicketButton} onPress={resetForm}>
                             <Text style={styles.newTicketText}>Send Another Message</Text>
                         </TouchableOpacity>
@@ -461,6 +499,45 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 22,
         paddingHorizontal: theme.spacing.xl,
+    },
+    ticketCard: {
+        marginTop: theme.spacing.lg,
+        backgroundColor: 'rgba(27,31,43,0.6)',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.08)',
+        paddingVertical: theme.spacing.sm,
+        paddingHorizontal: theme.spacing.lg,
+        alignItems: 'center',
+    },
+    ticketLabel: {
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textMuted,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+    },
+    ticketNumber: {
+        fontSize: theme.fontSize.lg,
+        color: theme.colors.textPrimary,
+        fontWeight: '700',
+        marginTop: 2,
+    },
+    statusButton: {
+        marginTop: theme.spacing.md,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(192,200,214,0.12)',
+        backgroundColor: 'rgba(27,31,43,0.4)',
+    },
+    statusButtonText: {
+        color: theme.colors.primary,
+        fontWeight: '600',
+        fontSize: theme.fontSize.sm,
     },
     newTicketButton: {
         marginTop: theme.spacing.xl,

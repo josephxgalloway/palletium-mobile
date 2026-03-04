@@ -11,17 +11,80 @@ import {
   Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/lib/store/playerStore';
-import api from '@/lib/api/client';
+import { unifiedSearch, type SearchArtist, type SearchPlaylist, type UnifiedSearchResults } from '@/lib/api/search';
 import { theme } from '@/constants/theme';
 import type { Track } from '@/types';
 import { getArtistName, getCoverUrl, getDuration } from '@/types';
 
+type SearchRow =
+  | { kind: 'header'; key: string; title: string; count: number }
+  | { kind: 'track'; key: string; track: Track }
+  | { kind: 'artist'; key: string; artist: SearchArtist }
+  | { kind: 'playlist'; key: string; playlist: SearchPlaylist };
+
+function buildRows(results: UnifiedSearchResults | null): SearchRow[] {
+  if (!results) return [];
+
+  const rows: SearchRow[] = [];
+
+  if (results.results.tracks.length > 0) {
+    rows.push({
+      kind: 'header',
+      key: 'header-tracks',
+      title: 'Tracks',
+      count: results.results.tracks.length,
+    });
+    rows.push(
+      ...results.results.tracks.map((track) => ({
+        kind: 'track' as const,
+        key: `track-${track.id}`,
+        track,
+      }))
+    );
+  }
+
+  if (results.results.artists.length > 0) {
+    rows.push({
+      kind: 'header',
+      key: 'header-artists',
+      title: 'Artists',
+      count: results.results.artists.length,
+    });
+    rows.push(
+      ...results.results.artists.map((artist) => ({
+        kind: 'artist' as const,
+        key: `artist-${artist.id}`,
+        artist,
+      }))
+    );
+  }
+
+  if (results.results.playlists.length > 0) {
+    rows.push({
+      kind: 'header',
+      key: 'header-playlists',
+      title: 'Playlists',
+      count: results.results.playlists.length,
+    });
+    rows.push(
+      ...results.results.playlists.map((playlist) => ({
+        kind: 'playlist' as const,
+        key: `playlist-${playlist.id}`,
+        playlist,
+      }))
+    );
+  }
+
+  return rows;
+}
+
 export default function SearchScreen() {
   const { playTrack, currentTrack, isPlaying } = usePlayerStore();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Track[]>([]);
+  const [results, setResults] = useState<UnifiedSearchResults | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -29,7 +92,7 @@ export default function SearchScreen() {
     setQuery(text);
 
     if (text.trim().length < 2) {
-      setResults([]);
+      setResults(null);
       setHasSearched(false);
       return;
     }
@@ -38,21 +101,11 @@ export default function SearchScreen() {
     setHasSearched(true);
 
     try {
-      // No search API exists - use discovery and filter client-side
-      const response = await api.get('/discovery/');
-      const allTracks = response.data.tracks || response.data || [];
-      const searchTerm = text.trim().toLowerCase();
-
-      // Filter tracks by title or artist name (use helper for correct field)
-      const filtered = allTracks.filter((track: Track) =>
-        track.title?.toLowerCase().includes(searchTerm) ||
-        getArtistName(track).toLowerCase().includes(searchTerm)
-      );
-
-      setResults(filtered);
+      const searchResults = await unifiedSearch(text, { type: 'all', limit: 20 });
+      setResults(searchResults);
     } catch (error: any) {
       console.error('Search failed:', error);
-      setResults([]);
+      setResults(null);
     } finally {
       setLoading(false);
     }
@@ -65,7 +118,7 @@ export default function SearchScreen() {
 
   const clearSearch = () => {
     setQuery('');
-    setResults([]);
+    setResults(null);
     setHasSearched(false);
   };
 
@@ -75,60 +128,119 @@ export default function SearchScreen() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const renderTrack = ({ item }: { item: Track }) => {
-    const isActive = currentTrack?.id === item.id;
-    const coverUrl = getCoverUrl(item);
-    const artistName = getArtistName(item);
-    const duration = getDuration(item);
+  const renderRow = ({ item }: { item: SearchRow }) => {
+    if (item.kind === 'header') {
+      return (
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{item.title}</Text>
+          <Text style={styles.sectionCount}>{item.count}</Text>
+        </View>
+      );
+    }
 
+    if (item.kind === 'track') {
+      const track = item.track;
+      const isActive = currentTrack?.id === track.id;
+      const coverUrl = getCoverUrl(track);
+      const artistName = getArtistName(track);
+      const duration = getDuration(track);
+
+      return (
+        <TouchableOpacity
+          style={[styles.resultItem, isActive && styles.resultItemActive]}
+          onPress={() => handleTrackPress(track)}
+        >
+          {coverUrl ? (
+            <Image source={{ uri: coverUrl }} style={styles.resultCover} />
+          ) : (
+            <View style={[styles.resultCover, styles.resultCoverPlaceholder]}>
+              <Ionicons name="musical-note" size={20} color={theme.colors.textMuted} />
+            </View>
+          )}
+
+          <View style={styles.resultInfo}>
+            <Text style={[styles.resultTitle, isActive && styles.resultTitleActive]} numberOfLines={1}>
+              {track.title}
+            </Text>
+            <Text style={styles.resultMeta} numberOfLines={1}>
+              {artistName} - {formatDuration(duration)}
+            </Text>
+          </View>
+
+          {isActive && isPlaying ? (
+            <View style={styles.resultAction}>
+              <Ionicons name="volume-high" size={20} color={theme.colors.accent} />
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.resultAction} onPress={() => handleTrackPress(track)}>
+              <Ionicons name="play" size={20} color={theme.colors.textPrimary} />
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+      );
+    }
+
+    if (item.kind === 'artist') {
+      const artist = item.artist;
+      return (
+        <TouchableOpacity
+          style={styles.resultItem}
+          onPress={() => router.push(`/artist/${artist.id}` as any)}
+        >
+          {artist.profileImageUrl ? (
+            <Image source={{ uri: artist.profileImageUrl }} style={[styles.resultCover, styles.artistCover]} />
+          ) : (
+            <View style={[styles.resultCover, styles.resultCoverPlaceholder, styles.artistCover]}>
+              <Ionicons name="person" size={20} color={theme.colors.textMuted} />
+            </View>
+          )}
+          <View style={styles.resultInfo}>
+            <Text style={styles.resultTitle} numberOfLines={1}>{artist.name}</Text>
+            <Text style={styles.resultMeta} numberOfLines={1}>
+              {artist.trackCount || 0} tracks · {artist.followerCount || 0} followers
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+        </TouchableOpacity>
+      );
+    }
+
+    const playlist = item.playlist;
     return (
       <TouchableOpacity
-        style={[styles.trackItem, isActive && styles.trackItemActive]}
-        onPress={() => handleTrackPress(item)}
+        style={styles.resultItem}
+        onPress={() => router.push(`/playlist/${playlist.id}` as any)}
       >
-        {coverUrl ? (
-          <Image source={{ uri: coverUrl }} style={styles.trackCover} />
+        {playlist.coverUrl ? (
+          <Image source={{ uri: playlist.coverUrl }} style={styles.resultCover} />
         ) : (
-          <View style={[styles.trackCover, styles.trackCoverPlaceholder]}>
-            <Ionicons name="musical-note" size={20} color={theme.colors.textMuted} />
+          <View style={[styles.resultCover, styles.resultCoverPlaceholder]}>
+            <Ionicons name="list" size={20} color={theme.colors.textMuted} />
           </View>
         )}
-
-        <View style={styles.trackInfo}>
-          <Text style={[styles.trackTitle, isActive && styles.trackTitleActive]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.trackArtist} numberOfLines={1}>
-            {artistName} - {formatDuration(duration)}
+        <View style={styles.resultInfo}>
+          <Text style={styles.resultTitle} numberOfLines={1}>{playlist.name}</Text>
+          <Text style={styles.resultMeta} numberOfLines={1}>
+            {(playlist.trackCount || 0)} tracks{playlist.creatorName ? ` · ${playlist.creatorName}` : ''}
           </Text>
         </View>
-
-        {isActive && isPlaying ? (
-          <View style={styles.playingIndicator}>
-            <Ionicons name="volume-high" size={20} color={theme.colors.accent} />
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.playButton}
-            onPress={() => handleTrackPress(item)}
-          >
-            <Ionicons name="play" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
-        )}
+        <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
       </TouchableOpacity>
     );
   };
+
+  const rows = buildRows(results);
+  const hasAnyResult = !!results && results.counts.total > 0;
 
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Search</Text>
 
-      {/* Search Input */}
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color={theme.colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Songs, artists..."
+          placeholder="Songs, artists, playlists..."
           placeholderTextColor={theme.colors.textMuted}
           value={query}
           onChangeText={handleSearch}
@@ -143,29 +255,36 @@ export default function SearchScreen() {
         )}
       </View>
 
-      {/* Results */}
+      {results?.fallback && (
+        <View style={styles.fallbackBanner}>
+          <Ionicons name="warning-outline" size={14} color={theme.colors.warning} />
+          <Text style={styles.fallbackText}>Showing track-only fallback results</Text>
+        </View>
+      )}
+
       {loading ? (
         <ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader} />
       ) : hasSearched ? (
-        <FlatList
-          data={results}
-          renderItem={renderTrack}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={styles.results}
-          keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={
-            <View style={styles.emptyResults}>
-              <Ionicons name="search-outline" size={48} color={theme.colors.textMuted} />
-              <Text style={styles.emptyText}>No results found</Text>
-              <Text style={styles.emptySubtext}>Try a different search term</Text>
-            </View>
-          }
-        />
+        hasAnyResult ? (
+          <FlatList
+            data={rows}
+            renderItem={renderRow}
+            keyExtractor={(item) => item.key}
+            contentContainerStyle={styles.results}
+            keyboardShouldPersistTaps="handled"
+          />
+        ) : (
+          <View style={styles.emptyResults}>
+            <Ionicons name="search-outline" size={48} color={theme.colors.textMuted} />
+            <Text style={styles.emptyText}>No results found</Text>
+            <Text style={styles.emptySubtext}>Try a different search term</Text>
+          </View>
+        )
       ) : (
         <View style={styles.placeholder}>
           <Ionicons name="musical-notes-outline" size={64} color={theme.colors.textMuted} />
           <Text style={styles.placeholderText}>Search for music</Text>
-          <Text style={styles.placeholderSubtext}>Find songs and artists on Palletium</Text>
+          <Text style={styles.placeholderSubtext}>Find tracks, artists, and playlists on Palletium</Text>
         </View>
       )}
     </SafeAreaView>
@@ -203,6 +322,23 @@ const styles = StyleSheet.create({
   clearButton: {
     padding: theme.spacing.xs,
   },
+  fallbackBanner: {
+    marginTop: theme.spacing.sm,
+    marginHorizontal: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.28)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  fallbackText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.warning,
+  },
   loader: {
     marginTop: theme.spacing.xxl,
   },
@@ -210,54 +346,69 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     paddingBottom: 100,
   },
-  trackItem: {
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.xs,
+  },
+  sectionTitle: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  sectionCount: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textMuted,
+  },
+  resultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: theme.spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
-  trackItemActive: {
+  resultItemActive: {
     backgroundColor: theme.colors.surface,
     marginHorizontal: -theme.spacing.sm,
     paddingHorizontal: theme.spacing.sm,
     borderRadius: theme.borderRadius.sm,
     borderBottomWidth: 0,
   },
-  trackCover: {
+  resultCover: {
     width: 48,
     height: 48,
     borderRadius: theme.borderRadius.sm,
   },
-  trackCoverPlaceholder: {
+  resultCoverPlaceholder: {
     backgroundColor: theme.colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  trackInfo: {
+  artistCover: {
+    borderRadius: 24,
+  },
+  resultInfo: {
     flex: 1,
     marginLeft: theme.spacing.md,
   },
-  trackTitle: {
+  resultTitle: {
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.textPrimary,
   },
-  trackTitleActive: {
+  resultTitleActive: {
     color: theme.colors.accent,
   },
-  trackArtist: {
+  resultMeta: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.textSecondary,
     marginTop: 2,
   },
-  playButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playingIndicator: {
+  resultAction: {
     width: 40,
     height: 40,
     justifyContent: 'center',
