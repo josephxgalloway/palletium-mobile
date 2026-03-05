@@ -79,8 +79,7 @@ export default function UploadScreen() {
   const [uploadType, setUploadType] = useState<UploadType | null>(null);
   const [step, setStep] = useState<Step>('type');
 
-  // Debug: log every render to catch re-mounts
-  console.log(`[Upload] RENDER step=${step} uploadType=${uploadType}`);
+  // Render re-mount tracking removed (was debug-only console.log)
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadPhase, setUploadPhase] = useState<UploadPhase | null>(null);
