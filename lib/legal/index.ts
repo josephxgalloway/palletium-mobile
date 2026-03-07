@@ -386,7 +386,9 @@ Any litigation shall be conducted in the state or federal courts located in Wilm
 
 For questions about these Terms, contact us at:
 
-Palletium Inc.
+Palletium, Inc.
+21143 Hawthorne Boulevard, Ste 271
+Gardena, CA 90503
 Email: legal@palletium.com
 Support: support@palletium.com
 
@@ -658,10 +660,12 @@ Your continued use after changes constitutes acceptance. Please review this poli
 
 For privacy-related questions or to exercise your rights:
 
-Palletium Inc.
+Palletium, Inc.
+21143 Hawthorne Boulevard, Ste 271
+Gardena, CA 90503
 Privacy Team
 Email: privacy@palletium.com
 
 For general inquiries: support@palletium.com
 
-Data Protection Officer (for EU inquiries): dpo@palletium.com`;
+Palletium will appoint a Data Protection Officer prior to actively marketing to EU residents. For privacy-related inquiries including EU data rights requests, contact privacy@palletium.com.`;
