@@ -63,12 +63,14 @@ Palletium operates on an identity-verified payment model:
 
 Verified Artists (ID verification + $49.99/year):
 • First unique listen from a subscribed listener: $1.00 payment to artist
-• Subsequent listens: $0.01 per play
+• Subsequent listens from subscribed listeners: $0.01 per play
 • Unlimited uploads, immediate discovery
 
 Unverified Artists (Free):
 • All plays: $0.004 per play
 • Up to 3 tracks, pending review
+
+For rate calculation purposes, "subscribed listener" includes both active subscribers and listeners on a free trial.
 
 Self-plays generate no earnings for either party.
 
@@ -78,7 +80,7 @@ Platform revenue is distributed as follows:
 • Platform Operations: 10%
 • Reserve Fund: 5%
 The Reserve Fund serves as a payment integrity reserve to protect against chargebacks, refunds, and payment reversals, as further described in the Payment Reserve and Offset Amendment.
-• Remainder to artist payouts
+• Artist Payouts: 70%
 
 4.3 Subscription Tiers
 
@@ -96,6 +98,8 @@ Listeners earn rewards based on their engagement and subscription tier. Listener
 
 4.5 Artist Payouts
 Artists receive payouts monthly. Minimum payout threshold is $50. Payouts are processed via Stripe to the artist's connected account, subject to any applicable reserves, offsets, or deductions as described in the Payment Reserve and Offset Amendment incorporated herein by reference.
+
+The 70/15/10/5 revenue split is computed at subscription intake and allocated to segregated pool accounts (artist pool, listener rewards pool, platform operations, and reserve fund). Artist payouts are drawn from the artist pool based on accumulated stream credits, not calculated per play at the time of listening.
 
 ---
 
