@@ -50,8 +50,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null, requires2FA: false, tempToken: null });
     try {
       const response = await api.post('/auth/login', { email, password });
-      console.log('Login response:', JSON.stringify(response.data, null, 2));
-
       const data = response.data;
 
       // Check if 2FA is required
