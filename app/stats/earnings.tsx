@@ -99,35 +99,11 @@ function ArtistEarningsScreen() {
                 const selfPlayCount = analyticsData.selfPlayCount
                     || Math.max(0, totalPlays - firstListens - repeatListens - baseRatePlays);
 
-                // Prefer API per-type earnings (settled truth via SUM(payment_amount)) when available.
-                // Fall back to proportional derivation for pre-F1 API versions.
-                let firstListenCents: number;
-                let repeatListenCents: number;
-                let baseRateCents: number;
-                let selfPlayCents: number;
-
-                if (analyticsData.firstListenEarnings != null && analyticsData.repeatListenEarnings != null) {
-                    // API returns settled amounts in dollars
-                    firstListenCents = Math.round((analyticsData.firstListenEarnings || 0) * 100);
-                    repeatListenCents = Math.round((analyticsData.repeatListenEarnings || 0) * 100);
-                    baseRateCents = Math.round((analyticsData.baseRateEarnings || 0) * 100);
-                    selfPlayCents = Math.round((analyticsData.selfPlayEarnings || 0) * 100);
-                } else {
-                    // Fallback: derive proportionally from total using formula rates
-                    const derivedRepeatListens = (analyticsData.totalPlays || 0) - firstListens;
-                    const grossFirstCents = firstListens * 100;
-                    const grossRepeatCents = derivedRepeatListens * 1;
-                    const grossTotalCents = grossFirstCents + grossRepeatCents;
-
-                    firstListenCents = grossTotalCents > 0
-                        ? Math.round(totalEarningsCents * (grossFirstCents / grossTotalCents))
-                        : 0;
-                    repeatListenCents = grossTotalCents > 0
-                        ? totalEarningsCents - firstListenCents
-                        : 0;
-                    baseRateCents = 0; // Legacy API doesn't distinguish base rate
-                    selfPlayCents = 0;
-                }
+                // API returns settled amounts in dollars — no formula fallback per mobile parity audit
+                const firstListenCents = Math.round((analyticsData.firstListenEarnings || 0) * 100);
+                const repeatListenCents = Math.round((analyticsData.repeatListenEarnings || 0) * 100);
+                const baseRateCents = Math.round((analyticsData.baseRateEarnings || 0) * 100);
+                const selfPlayCents = Math.round((analyticsData.selfPlayEarnings || 0) * 100);
 
                 detailedSummary = {
                     total_earnings: totalEarningsCents,
@@ -151,17 +127,9 @@ function ArtistEarningsScreen() {
                 const dbFirstListens = dashboardData.first_listens || dashboardData.discovery_count || 0;
                 const dbRepeatListens = (dashboardData.total_plays || 0) - dbFirstListens;
 
-                // Derive per-type earnings proportionally (same formula as analytics branch)
-                const dbGrossFirst = dbFirstListens * 100;
-                const dbGrossRepeat = dbRepeatListens * 1;
-                const dbGrossTotal = dbGrossFirst + dbGrossRepeat;
-
-                const dbFirstCents = dbGrossTotal > 0
-                    ? Math.round(dbTotalCents * (dbGrossFirst / dbGrossTotal))
-                    : 0;
-                const dbRepeatCents = dbGrossTotal > 0
-                    ? dbTotalCents - dbFirstCents
-                    : 0;
+                // Dashboard fallback: no per-type breakdown available, show $0.00
+                const dbFirstCents = 0;
+                const dbRepeatCents = 0;
 
                 detailedSummary = {
                     total_earnings: dbTotalCents,
